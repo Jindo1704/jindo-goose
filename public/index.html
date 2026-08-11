@@ -23,6 +23,7 @@
         .chat-box-area { flex: 1; overflow-y: auto; background-color: #1e1e2e; padding: 10px; border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 5px; border: 2px solid #45475a; }
         .chat-msg { background: #45475a; padding: 6px 10px; border-radius: 12px; width: fit-content; max-width: 90%; word-break: break-all; }
         .chat-system { color: #f9e2af; font-weight: bold; font-size: 12px; align-self: center; background: none; }
+        .chat-time { font-size: 10px; color: #a6adc8; margin-left: 6px; }
 
         #app-container { display: none; flex-direction: column; height: 100%; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -117,7 +118,6 @@
                 <div id="current-room-display" class="room-info">접속 중...</div>
             </div>
             <div class="btn-group">
-                <!-- 맵 드롭다운 기능 -->
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
                 <select id="map-selector" class="btn-map" style="color:#11111b; padding-right:20px;" onchange="changeMap(this.value)">
                     <option value="image_0a04c3.jpg">🗺️ 맵: 지하실</option>
@@ -201,7 +201,6 @@
         const mapWrapper = document.getElementById('map-wrapper');
         const mapArea = document.getElementById('map-area');
 
-        // 맵 변경 기능
         function changeMap(val) {
             if(val === 'custom') {
                 document.getElementById('map-upload').click();
@@ -303,6 +302,21 @@
             applyMapAspectRatio();
         });
 
+        // ====== 💬 로비 채팅 (히스토리 지원 및 시간 표시) ======
+        function appendLobbyChat(data) {
+            const box = document.getElementById('lobby-chat-box'); 
+            const el = document.createElement('div'); el.className = 'chat-msg';
+            el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg} <span class="chat-time">${data.time}</span>`;
+            box.appendChild(el); box.scrollTop = box.scrollHeight;
+        }
+
+        socket.on('load_lobby_chat_history', (history) => {
+            document.getElementById('lobby-chat-box').innerHTML = ''; // 기존 초기화
+            history.forEach(appendLobbyChat);
+        });
+
+        socket.on('receive_lobby_chat', appendLobbyChat);
+
         function sendLobbyChat() {
             const nickname = getNickname(); if(!nickname) return;
             const input = document.getElementById('lobby-chat-input');
@@ -310,12 +324,8 @@
             socket.emit('send_lobby_chat', { sender: nickname, msg: msg, color: myColor });
             input.value = '';
         }
-        socket.on('receive_lobby_chat', (data) => {
-            const box = document.getElementById('lobby-chat-box'); const el = document.createElement('div'); el.className = 'chat-msg';
-            el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`;
-            box.appendChild(el); box.scrollTop = box.scrollHeight;
-        });
 
+        // 펜 그리기 로직
         let isPenMode = false;
         const drawingCanvas = document.getElementById('drawing-canvas');
         const ctx = drawingCanvas.getContext('2d');
@@ -406,17 +416,31 @@
             });
         });
 
+        // ====== 💬 게임방 채팅 (히스토리 지원 및 시간 표시) ======
+        function appendGameChat(data) {
+            const box = document.getElementById('game-chat-box'); const el = document.createElement('div');
+            if(data.sender.includes('시스템')) { 
+                el.className = 'chat-msg chat-system'; el.style.color = data.color; 
+                el.innerHTML = `${data.msg} <span class="chat-time" style="color:#6c7086;">${data.time}</span>`; 
+            } 
+            else { 
+                el.className = 'chat-msg'; 
+                el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg} <span class="chat-time">${data.time}</span>`; 
+            }
+            box.appendChild(el); box.scrollTop = box.scrollHeight;
+        }
+
+        socket.on('load_room_chat_history', (history) => {
+            document.getElementById('game-chat-box').innerHTML = ''; // 기존 초기화
+            history.forEach(appendGameChat);
+        });
+
+        socket.on('receive_chat', appendGameChat);
+
         function sendGameChat() {
             const input = document.getElementById('game-chat-input'); const msg = input.value.trim(); if(!msg) return;
             socket.emit('send_chat', { msg }); input.value = '';
         }
-
-        socket.on('receive_chat', (data) => {
-            const box = document.getElementById('game-chat-box'); const el = document.createElement('div');
-            if(data.sender.includes('시스템')) { el.className = 'chat-msg chat-system'; el.style.color = data.color; el.innerText = data.msg; } 
-            else { el.className = 'chat-msg'; el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`; }
-            box.appendChild(el); box.scrollTop = box.scrollHeight;
-        });
 
         function saveSnapshot() {
             const snapshotData = { markers: [], corpses: [], lines: [...allLines] };
@@ -498,7 +522,7 @@
             const marker = document.createElement('div');
             marker.className = 'marker'; marker.id = `marker-${i}`; marker.innerText = `${i}`;
             setMarkerInitialPosition(marker, i);
-            document.getElementById('map-wrapper').appendChild(marker); 
+            mapWrapper.appendChild(marker); 
             makeDraggable(marker);
         }
         
@@ -550,7 +574,7 @@
             const corpse = document.createElement('div'); corpse.className = 'marker corpse-marker'; corpse.id = id;
             corpse.innerHTML = `💀 시체 <span class="corpse-close" onclick="emitRemoveCorpse('${id}')">X</span>`;
             corpse.style.left = left; corpse.style.top = top; corpse.style.transform = 'translate(-50%, -50%)';
-            document.getElementById('map-wrapper').appendChild(corpse); makeDraggable(corpse);
+            mapWrapper.appendChild(corpse); makeDraggable(corpse);
         }
         function resetMarkersOnlyUI() {
             for(let i = 1; i <= 16; i++) { setMarkerInitialPosition(document.getElementById(`marker-${i}`), i); document.getElementById(`loc-${i}`).value = ""; }
@@ -578,9 +602,7 @@
             function elementDrag(e) {
                 e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
                 
-                const wrapper = document.getElementById('map-wrapper');
-                const rect = wrapper.getBoundingClientRect();
-                
+                const rect = mapWrapper.getBoundingClientRect();
                 let newTop = elmnt.offsetTop - pos2;
                 let newLeft = elmnt.offsetLeft - pos1;
                 
