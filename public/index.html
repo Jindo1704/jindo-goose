@@ -47,15 +47,12 @@
 
         .map-container { flex: 1.4; position: relative; background-color: #11111b; border-radius: 10px; overflow: hidden; border: 2px solid #45475a; display: flex; align-items: center; justify-content: center; }
         
-        /* ✨ 새로 추가된 지도 비율 고정 래퍼 (비율 유지 핵심) ✨ */
         #map-wrapper { position: relative; max-width: 100%; max-height: 100%; margin: auto; }
         #map-wrapper img { width: 100%; height: 100%; display: block; }
         
-        /* 캔버스 및 레이어들이 map-wrapper에 딱 맞게 고정됨 */
         #drawing-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
         #drawing-canvas.pen-active { pointer-events: auto; cursor: crosshair; touch-action: none; }
         
-        /* 전체화면(확대) 모드 CSS */
         .fullscreen-mode { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; z-index: 9999; background-color: #11111b; border: none !important; border-radius: 0 !important; }
         
         .side-panel { flex: 0.5; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
@@ -121,7 +118,6 @@
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
                 <button class="btn-pen" id="btn-pen-toggle" onclick="togglePen()">🖍️ 펜 켜기</button>
                 <button class="btn-clear-pen" onclick="emitClearCanvas()">🗑️ 선 지우기</button>
-                <!-- ✨ 전체화면 버튼 추가 -->
                 <button class="btn-map" onclick="toggleFullscreenMap()">🔍 지도 꽉차게</button>
                 
                 <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체</button>
@@ -139,12 +135,9 @@
                 </table>
             </div>
 
-            <!-- 지도 컨테이너 -->
             <div class="map-container" id="map-area">
-                <!-- 전체화면 닫기 버튼 (숨겨져 있음) -->
                 <button id="btn-exit-fullscreen" class="btn-corpse" style="display:none; position:absolute; top:20px; right:20px; z-index:10001; padding:12px 20px; font-size:16px;" onclick="toggleFullscreenMap()">❌ 맵 작게보기</button>
                 
-                <!-- 지도의 원본 비율을 고정하여 뒤틀림을 방지하는 Wrapper -->
                 <div id="map-wrapper">
                     <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵">
                     <canvas id="drawing-canvas"></canvas>
@@ -154,8 +147,6 @@
                         <canvas id="snapshot-canvas"></canvas>
                         <div id="snapshot-markers-container"></div>
                     </div>
-                    
-                    <!-- 마커들이 이 map-wrapper 안에 % 비율로 생성됨 -->
                 </div>
             </div>
             
@@ -190,7 +181,6 @@
         const myColor = 'hsl(' + Math.floor(Math.random() * 360) + ', 80%, 70%)';
         let currentSnapshots = [];
 
-        // ====== 지도 비율 유지 (뒤틀림 방지 핵심) ======
         const mapImg = document.getElementById('map-image');
         function applyMapAspectRatio() {
             if(mapImg.naturalWidth) {
@@ -201,7 +191,6 @@
         mapImg.addEventListener('load', applyMapAspectRatio);
         if(mapImg.complete) applyMapAspectRatio();
 
-        // ====== 확대(전체화면) 기능 ======
         function toggleFullscreenMap() {
             const mapContainer = document.getElementById('map-area');
             const exitBtn = document.getElementById('btn-exit-fullscreen');
@@ -212,11 +201,9 @@
                 mapContainer.classList.add('fullscreen-mode');
                 exitBtn.style.display = 'block';
             }
-            // 확대/축소 애니메이션 직후 캔버스 좌표 재설정
             setTimeout(resizeCanvas, 50); 
         }
 
-        // ====== 로비 기능 ======
         socket.on('room_list', (list) => {
             const listUI = document.getElementById('room-list-ui');
             listUI.innerHTML = '';
@@ -283,7 +270,6 @@
             box.appendChild(el); box.scrollTop = box.scrollHeight;
         });
 
-        // ====== 🖍️ 펜 툴 그리기 로직 (비율 기반) ======
         let isPenMode = false;
         const drawingCanvas = document.getElementById('drawing-canvas');
         const ctx = drawingCanvas.getContext('2d');
@@ -344,13 +330,11 @@
         socket.on('receive_draw_line', (data) => drawLineLocally(data.x0, data.y0, data.x1, data.y1, data.color, true));
         socket.on('receive_clear_canvas', () => clearCanvasLocally());
 
-        // ====== 실시간 마우스 커서 전송 (비율 기반 동기화) ======
         let lastMouseTime = 0;
         document.addEventListener('mousemove', (e) => {
             if(currentRoom && Date.now() - lastMouseTime > 50) {
                 const wrapper = document.getElementById('map-wrapper');
                 const rect = wrapper.getBoundingClientRect();
-                // 마우스 위치도 지도 Wrapper 기준으로 비율 계산
                 let xRatio = (e.clientX - rect.left) / rect.width;
                 let yRatio = (e.clientY - rect.top) / rect.height;
                 socket.emit('mouse_move', { x: xRatio, y: yRatio }); 
@@ -369,7 +353,6 @@
         });
         socket.on('remove_cursor', (id) => { const c = document.getElementById('cursor-' + id); if(c) c.remove(); });
 
-        // ====== 사이드 패널 (명단, 방 채팅) ======
         socket.on('update_user_list', (users) => {
             document.getElementById('user-count').innerText = users.length;
             const ul = document.getElementById('user-list-ui'); ul.innerHTML = '';
@@ -392,7 +375,6 @@
             box.appendChild(el); box.scrollTop = box.scrollHeight;
         });
 
-        // ====== 스냅샷 (라운드 저장) ======
         function saveSnapshot() {
             const snapshotData = { markers: [], corpses: [], lines: [...allLines] };
             for(let i = 1; i <= 16; i++) {
@@ -445,7 +427,6 @@
         }
         function exitSnapshot() { document.getElementById('snapshot-layer').style.display = 'none'; }
 
-        // ====== 테이블 및 맵 로직 ======
         const gooseRoles = ["거위 (Goose)", "한탕주의자 (Gravy)", "엔지니어 (Engineer) 🧭", "경호원 (Bodyguard)", "영매사 (Medium)", "자경단 (Vigilante)", "보안관 (Sheriff)", "캐나다 거위 (Canadian)", "흉내쟁이 (Mimic) 🧭", "탐정 (Detective)", "조류 관찰자 (Birdwatcher) 🧭", "장의사 (Mortician) 🧭", "정치가 (Politician) 🧭", "열쇠공 (Locksmith) 🧭", "연예인 (Celebrity)", "복수자 (Avenger)", "모험가 (Adventurer) 🧭", "차원 여행자 (Astral)", "부랑아 (Street Urchin) 🧭", "추적자 (Tracker) 🧭", "스토커 (Stalker)", "생존주의자 (Survivalist)", "로비스트 (Lobbyist)", "점쟁이 (Fortune Teller) 🧭", "과학자 (Scientist)", "센서 (Sensor) 🧭", "검시관 (Coroner)", "병사 (Soldier)", "루시드 드리머 (Lucid Dreamer)"];
         const duckRoles = ["오리 (Duck)", "식인종 (Cannibal) 🧭", "변장술사 (Morphling) 🧭", "군기반장 (Silencer)", "전문 업자 (Professional)", "청부업자 (Hitman)", "스파이 (Spy)", "암살자 (Assassin)", "밀고자 (Snitch) 🧭", "파티 오리 (Party) 🎤", "폭탄광 (Demolitionist)", "신분 도용범 (Identity Thief) 🧭", "시체 운반자 (Undertaker) 🧭", "닌자 (Ninja) 🧭", "투명 오리 (Invisibility)", "연쇄 살조범 (Serial Killer)", "주술사 (Warlock) 🧭", "초능력자 (Esper)", "전도사 (Preacher)", "드론 (Drone) 🧭", "큐피드 (Cupid) 🧭", "토끼 (Rabbit) 🧭", "마임 (Mime) 🧭", "광대 오리 (Clown)", "약탈자 (Looter) 🧭", "저격수 (Sniper) 🧭", "주술사 (Witch Doctor)", "숙주와 기생충 (Carrier&Parasite)", "길을 잃은 아기 오리 (Lost Duckling) 🧭"];
         const neutralRoles = ["도도새 (Dodo Bird)", "대머리수리 (Vulture) 🧭", "비둘기 (Pigeon)", "송골매 (Falcon)", "결투 도도새 (Dueling Dodos)", "펠리컨 (Pelican)", "매 (Hawk) 🧭", "큰까마귀 (Raven)", "뻐꾸기 (Cuckoo)"];
@@ -476,14 +457,16 @@
             const marker = document.createElement('div');
             marker.className = 'marker'; marker.id = `marker-${i}`; marker.innerText = `${i}`;
             setMarkerInitialPosition(marker, i);
-            mapWrapper.appendChild(marker); // 맵 래퍼에 마커를 붙여서 비율 고정
+            mapWrapper.appendChild(marker); 
             makeDraggable(marker);
         }
         
-        // 마커 초기 위치를 %로 지정
+        // ✨ 전체화면 모드에서도 비율이 꼬이지 않게 픽셀(px)값으로 좁게 배치 ✨
         function setMarkerInitialPosition(marker, i) {
             const col = (i - 1) % 8; const rowIdx = Math.floor((i - 1) / 8);
-            marker.style.left = `${5 + (col * 11)}%`; marker.style.top = `${5 + (rowIdx * 11)}%`; marker.style.transform = 'none';
+            marker.style.left = `${10 + (col * 42)}px`; 
+            marker.style.top = `${10 + (rowIdx * 35)}px`; 
+            marker.style.transform = 'none';
         }
 
         function emitInput(field, id, value) {
@@ -545,7 +528,6 @@
             document.querySelectorAll('.corpse-marker').forEach(el => el.remove());
         }
         
-        // ====== 마커 드래그 (비율 계산 기반) ======
         function makeDraggable(elmnt) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
             elmnt.onmousedown = dragMouseDown;
@@ -562,7 +544,6 @@
                 let newTop = elmnt.offsetTop - pos2;
                 let newLeft = elmnt.offsetLeft - pos1;
                 
-                // 위치를 화면크기에 구애받지 않도록 퍼센트(%)로 변환
                 let topPct = (newTop / rect.height) * 100;
                 let leftPct = (newLeft / rect.width) * 100;
 
@@ -592,7 +573,7 @@
                 reader.onload = function(e) { 
                     const img = document.getElementById('map-image'); 
                     img.src = e.target.result; 
-                    img.onload = applyMapAspectRatio; // 새 이미지 로딩 후 비율 재계산
+                    img.onload = applyMapAspectRatio;
                 }; 
                 reader.readAsDataURL(file); 
             }
