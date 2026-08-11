@@ -6,31 +6,34 @@
     <title>구스구스덕 실시간 커뮤니티 트래커</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        /* 기본 스타일 유지 및 커서 이동 시 스크롤바 생김 방지 */
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1e1e2e; color: #cdd6f4; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; overflow: hidden; }
         
+        /* 1. 로비 화면 디자인 (레이아웃 개편) */
         #lobby-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #1e1e2e; display: flex; align-items: center; justify-content: center; z-index: 9999; }
-        .lobby-box { background-color: #313244; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 700px; display: flex; gap: 30px; }
-        .lobby-section { flex: 1; display: flex; flex-direction: column; }
-        .lobby-section h2 { color: #f9e2af; margin-top: 0; border-bottom: 2px solid #45475a; padding-bottom: 10px; }
-        .lobby-input { width: 90%; padding: 12px; margin: 8px 0; border: 2px solid #45475a; border-radius: 8px; background-color: #1e1e2e; color: white; font-weight: bold; }
+        .lobby-box { background-color: #313244; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 900px; display: flex; gap: 30px; height: 500px; }
+        .lobby-section { display: flex; flex-direction: column; }
+        .lobby-section h2 { color: #f9e2af; margin-top: 0; border-bottom: 2px solid #45475a; padding-bottom: 10px; font-size: 18px; margin-bottom: 10px; }
+        .lobby-input { width: 90%; padding: 10px; margin: 5px 0; border: 2px solid #45475a; border-radius: 8px; background-color: #1e1e2e; color: white; font-weight: bold; }
         .lobby-input:focus { border-color: #89b4fa; outline: none; }
-        .lobby-btn { background-color: #a6e3a1; color: #11111b; padding: 12px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        .lobby-btn { background-color: #a6e3a1; color: #11111b; padding: 10px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin-top: 5px; }
         .lobby-btn:hover { background-color: #94d08f; }
-        #room-list-ui { background-color: #1e1e2e; flex: 1; border-radius: 8px; overflow-y: auto; padding: 10px; margin-top: 10px; border: 2px solid #45475a; }
+        #room-list-ui { background-color: #1e1e2e; flex: 1; border-radius: 8px; overflow-y: auto; padding: 10px; border: 2px solid #45475a; }
         .room-item { background-color: #45475a; padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; transition: 0.2s; }
         .room-item:hover { background-color: #585b70; color: #a6e3a1; }
 
+        /* 채팅 공통 스타일 */
+        .chat-box-area { flex: 1; overflow-y: auto; background-color: #1e1e2e; padding: 10px; border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 5px; border: 2px solid #45475a; }
+        .chat-msg { background: #45475a; padding: 6px 10px; border-radius: 12px; width: fit-content; max-width: 90%; word-break: break-all; }
+        .chat-system { color: #f9e2af; font-weight: bold; font-size: 12px; align-self: center; background: none; }
+
+        /* 2. 메인 앱 화면 */
         #app-container { display: none; flex-direction: column; height: 100%; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         h1 { color: #f9e2af; margin: 0; font-size: 24px; }
         .room-info { background-color: #45475a; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
         .btn-group button { padding: 8px 12px; margin-left: 5px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
-        .btn-reset-all { background-color: #f38ba8; color: #11111b; }
-        .btn-reset-marker { background-color: #fab387; color: #11111b; }
-        .btn-corpse { background-color: #a6e3a1; color: #11111b; }
-        .btn-map { background-color: #89b4fa; color: #11111b; }
-        .btn-copy { background-color: #f5c2e7; color: #11111b; }
+        .btn-reset-all { background-color: #f38ba8; color: #11111b; } .btn-reset-marker { background-color: #fab387; color: #11111b; }
+        .btn-corpse { background-color: #a6e3a1; color: #11111b; } .btn-map { background-color: #89b4fa; color: #11111b; } .btn-copy { background-color: #f5c2e7; color: #11111b; }
 
         .main-container { display: flex; gap: 15px; flex: 1; overflow: hidden; }
         
@@ -54,10 +57,6 @@
         #user-list-ui li { background: #45475a; padding: 5px 10px; border-radius: 5px; margin-bottom: 5px; font-weight: bold; font-size: 13px; display: flex; align-items: center; }
         .user-color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; border: 1px solid #fff; }
         
-        #chat-box { flex: 1; overflow-y: auto; background-color: #1e1e2e; padding: 10px; border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
-        .chat-msg { background: #45475a; padding: 6px 10px; border-radius: 12px; width: fit-content; max-width: 90%; word-break: break-all; }
-        .chat-system { color: #f9e2af; font-weight: bold; font-size: 12px; align-self: center; background: none; }
-        
         #snapshot-list-ui { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
         .snap-item { background: #45475a; padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .snap-item:hover { background: #89b4fa; color: #11111b; font-weight: bold; }
@@ -71,48 +70,44 @@
         #snapshot-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; z-index: 500; }
         .return-btn { position: absolute; top: 10px; right: 10px; background-color: #f38ba8; color: white; padding: 10px 20px; font-weight: bold; border-radius: 8px; cursor: pointer; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
 
-        /* ✨ 상대방 마우스 커서 스타일 (반투명 적용) ✨ */
-        .remote-cursor {
-            position: absolute;
-            pointer-events: none; /* 클릭 방해 안 함 */
-            z-index: 10000;
-            opacity: 0.75; /* 🌟 반투명 설정 */
-            transition: left 0.05s linear, top 0.05s linear;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
-        }
-        .cursor-name {
-            margin-top: -5px;
-            margin-left: 10px;
-            padding: 3px 6px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: bold;
-            color: #11111b;
-            white-space: nowrap;
-        }
+        .remote-cursor { position: absolute; pointer-events: none; z-index: 10000; opacity: 0.75; transition: left 0.05s linear, top 0.05s linear; display: flex; flex-direction: column; align-items: flex-start; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }
+        .cursor-name { margin-top: -5px; margin-left: 10px; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: #11111b; white-space: nowrap; }
     </style>
 </head>
 <body>
 
+    <!-- 1. 로비 화면 -->
     <div id="lobby-container">
         <div class="lobby-box">
-            <div class="lobby-section" style="border-right: 2px solid #45475a; padding-right: 30px;">
-                <h2>✨ 새 방 만들기</h2>
-                <input type="text" id="create-room-name" class="lobby-input" placeholder="방 이름 입력">
-                <input type="password" id="create-room-pw" class="lobby-input" placeholder="비밀번호 설정">
+            <!-- 1-1. 닉네임 설정 및 방 관리 -->
+            <div class="lobby-section" style="flex: 1.2; border-right: 2px solid #45475a; padding-right: 20px;">
+                <h2>👤 1. 닉네임 설정</h2>
+                <input type="text" id="global-nickname" class="lobby-input" placeholder="사용할 닉네임 (입력 필수!)">
+                
+                <h2 style="margin-top: 15px;">✨ 2. 새 방 만들기</h2>
+                <div style="display:flex; gap:5px;">
+                    <input type="text" id="create-room-name" class="lobby-input" style="flex:1;" placeholder="방 이름">
+                    <input type="password" id="create-room-pw" class="lobby-input" style="flex:1;" placeholder="비밀번호">
+                </div>
                 <button class="lobby-btn" onclick="createRoom()">방 생성하기</button>
-            </div>
-            <div class="lobby-section">
-                <h2>🚪 방 목록에서 입장</h2>
-                <p style="margin:0; font-size: 13px; color: #a6adc8;">원하는 방을 클릭하여 입장하세요.</p>
+
+                <h2 style="margin-top: 15px;">🚪 3. 방 목록에서 입장</h2>
                 <div id="room-list-ui"></div>
+            </div>
+
+            <!-- 1-2. 로비 전용 채팅 -->
+            <div class="lobby-section" style="flex: 1; padding-left: 10px;">
+                <h2>💬 로비 대기실 채팅</h2>
+                <div id="lobby-chat-box" class="chat-box-area"></div>
+                <div style="display:flex; gap:5px; margin-top:10px;">
+                    <input type="text" id="lobby-chat-input" class="lobby-input" style="margin:0; flex:1;" placeholder="채팅 입력..." onkeypress="if(event.key==='Enter') sendLobbyChat()">
+                    <button class="lobby-btn" style="margin:0; padding:10px;" onclick="sendLobbyChat()">전송</button>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- 2. 메인 앱 화면 -->
     <div id="app-container">
         <div class="header">
             <div style="display:flex; align-items:center; gap:15px;">
@@ -151,11 +146,11 @@
                     <ul id="user-list-ui"></ul>
                 </div>
                 <div class="panel-box" style="flex: 0.4;">
-                    <h3>💬 실시간 채팅</h3>
-                    <div id="chat-box"></div>
+                    <h3>💬 게임방 실시간 채팅</h3>
+                    <div id="game-chat-box" class="chat-box-area"></div>
                     <div style="display:flex; gap:5px; margin-top:10px;">
-                        <input type="text" id="chat-input" placeholder="메시지 입력..." style="flex:1;" onkeypress="if(event.key==='Enter') sendChat()">
-                        <button class="btn-map" onclick="sendChat()">전송</button>
+                        <input type="text" id="game-chat-input" placeholder="메시지 입력..." style="flex:1;" onkeypress="if(event.key==='Enter') sendGameChat()">
+                        <button class="btn-map" onclick="sendGameChat()">전송</button>
                     </div>
                 </div>
                 <div class="panel-box" style="flex: 0.3;">
@@ -173,8 +168,6 @@
         const socket = io();
         let currentRoom = "";
         let myName = "";
-        
-        // ✨ 나만의 고유 색상 무작위 생성 (접속할 때마다 부여)
         const myColor = 'hsl(' + Math.floor(Math.random() * 360) + ', 80%, 70%)';
         let currentSnapshots = [];
 
@@ -183,7 +176,7 @@
             const listUI = document.getElementById('room-list-ui');
             listUI.innerHTML = '';
             if(list.length === 0) {
-                listUI.innerHTML = '<p style="text-align:center; color:#a6adc8;">현재 생성된 방이 없습니다.</p>';
+                listUI.innerHTML = '<p style="text-align:center; color:#a6adc8; margin-top:30px;">생성된 방이 없습니다.</p>';
             } else {
                 list.forEach(r => {
                     const el = document.createElement('div');
@@ -195,7 +188,15 @@
             }
         });
 
+        function getNickname() {
+            const name = document.getElementById('global-nickname').value.trim();
+            if(!name) alert("왼쪽 상단에서 [닉네임]을 먼저 설정해주세요!");
+            return name;
+        }
+
         function createRoom() {
+            const nickname = getNickname();
+            if(!nickname) return;
             const roomVal = document.getElementById('create-room-name').value.trim();
             const pwVal = document.getElementById('create-room-pw').value.trim();
             if(!roomVal || !pwVal) return alert("방 이름과 비밀번호를 모두 입력하세요!");
@@ -209,13 +210,12 @@
         });
 
         function joinExistingRoom(roomName) {
-            const nickname = prompt(`[${roomName}] 방에 입장합니다.\n사용하실 닉네임을 입력하세요:`);
+            const nickname = getNickname();
             if(!nickname) return;
-            const password = prompt(`비밀번호를 입력하세요:`);
-            if(!password) return;
-            
-            // 색상과 함께 입장 요청
-            socket.emit('join_room', { room: roomName, nickname: nickname.trim(), password: password.trim(), color: myColor });
+            const password = prompt(`[${roomName}] 방 비밀번호를 입력하세요:`);
+            if(password === null) return;
+            myName = nickname;
+            socket.emit('join_room', { room: roomName, nickname: nickname, password: password.trim(), color: myColor });
         }
 
         socket.on('room_error', (msg) => alert(msg));
@@ -223,18 +223,33 @@
             currentRoom = roomName;
             document.getElementById('lobby-container').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
-            
-            // 상단에 내 닉네임과 내 색상 점(Dot) 표시
-            document.getElementById('current-room-display').innerHTML = 
-                `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${myColor}; margin-right:5px; border:1px solid #fff;"></span> ${myName} (📡 ${roomName})`;
+            document.getElementById('current-room-display').innerHTML = `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${myColor}; margin-right:5px; border:1px solid #fff;"></span> ${myName} (📡 ${roomName})`;
         });
 
-        // ====== 실시간 마우스 커서 전송 기능 ======
+        // ====== 로비 채팅 기능 ======
+        function sendLobbyChat() {
+            const nickname = getNickname();
+            if(!nickname) return;
+            const input = document.getElementById('lobby-chat-input');
+            const msg = input.value.trim();
+            if(!msg) return;
+            socket.emit('send_lobby_chat', { sender: nickname, msg: msg, color: myColor });
+            input.value = '';
+        }
+
+        socket.on('receive_lobby_chat', (data) => {
+            const box = document.getElementById('lobby-chat-box');
+            const el = document.createElement('div');
+            el.className = 'chat-msg';
+            el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`;
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        });
+
+        // ====== 실시간 마우스 커서 전송 ======
         let lastMouseTime = 0;
         document.addEventListener('mousemove', (e) => {
-            // 마우스 움직임을 0.05초(50ms) 간격으로 전송하여 서버 부하 방지
             if(currentRoom && Date.now() - lastMouseTime > 50) {
-                // 화면 비율(vw, vh)로 계산하여 모니터 크기가 달라도 비슷한 위치에 표시됨
                 const x = (e.pageX / window.innerWidth) * 100;
                 const y = (e.pageY / window.innerHeight) * 100;
                 socket.emit('mouse_move', { x, y });
@@ -242,11 +257,9 @@
             }
         });
 
-        // 상대방 마우스 커서 수신 기능
         socket.on('update_mouse', (data) => {
             let cursor = document.getElementById('cursor-' + data.id);
             if(!cursor) {
-                // 커서가 없으면 새로 생성 (SVG 화살표 + 닉네임 이름표)
                 cursor = document.createElement('div');
                 cursor.id = 'cursor-' + data.id;
                 cursor.className = 'remote-cursor';
@@ -258,32 +271,25 @@
                 `;
                 document.body.appendChild(cursor);
             }
-            cursor.style.left = data.x + 'vw';
-            cursor.style.top = data.y + 'vh';
+            cursor.style.left = data.x + 'vw'; cursor.style.top = data.y + 'vh';
         });
 
-        // 상대방 퇴장 시 마우스 커서 지우기
-        socket.on('remove_cursor', (id) => {
-            const c = document.getElementById('cursor-' + id);
-            if(c) c.remove();
-        });
+        socket.on('remove_cursor', (id) => { const c = document.getElementById('cursor-' + id); if(c) c.remove(); });
 
-
-        // ====== 사이드 패널 기능 (유저 명단, 채팅) ======
+        // ====== 사이드 패널 (명단, 방 채팅) ======
         socket.on('update_user_list', (users) => {
             document.getElementById('user-count').innerText = users.length;
             const ul = document.getElementById('user-list-ui');
             ul.innerHTML = '';
             users.forEach(u => {
                 const li = document.createElement('li');
-                // 유저 명단에 각자의 고유 색상 점 표시
                 li.innerHTML = `<span class="user-color-dot" style="background-color:${u.color};"></span> ${u.nickname}`;
                 ul.appendChild(li);
             });
         });
 
-        function sendChat() {
-            const input = document.getElementById('chat-input');
+        function sendGameChat() {
+            const input = document.getElementById('game-chat-input');
             const msg = input.value.trim();
             if(!msg) return;
             socket.emit('send_chat', { msg });
@@ -291,31 +297,25 @@
         }
 
         socket.on('receive_chat', (data) => {
-            const box = document.getElementById('chat-box');
+            const box = document.getElementById('game-chat-box');
             const el = document.createElement('div');
             if(data.sender.includes('시스템')) {
-                el.className = 'chat-msg chat-system';
-                el.style.color = data.color;
-                el.innerText = data.msg;
+                el.className = 'chat-msg chat-system'; el.style.color = data.color; el.innerText = data.msg;
             } else {
-                el.className = 'chat-msg';
-                // 채팅 보낸 사람 닉네임에 고유 색상 적용
-                el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`;
+                el.className = 'chat-msg'; el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`;
             }
             box.appendChild(el);
             box.scrollTop = box.scrollHeight;
         });
 
-        // ====== 스냅샷 (라운드 저장) 기능 ======
+        // ====== 스냅샷 (라운드 저장) ======
         function saveSnapshot() {
             const snapshotData = { markers: [], corpses: [] };
             for(let i = 1; i <= 16; i++) {
                 const m = document.getElementById(`marker-${i}`);
                 snapshotData.markers.push({ id: i, left: m.style.left, top: m.style.top, text: m.innerText, className: m.className });
             }
-            document.querySelectorAll('.corpse-marker').forEach(c => {
-                snapshotData.corpses.push({ left: c.style.left, top: c.style.top });
-            });
+            document.querySelectorAll('.corpse-marker').forEach(c => { snapshotData.corpses.push({ left: c.style.left, top: c.style.top }); });
             socket.emit('save_snapshot', { snapshotData });
         }
 
@@ -324,8 +324,7 @@
             const ul = document.getElementById('snapshot-list-ui');
             ul.innerHTML = '';
             snapshots.forEach((snap, idx) => {
-                const li = document.createElement('li');
-                li.className = 'snap-item';
+                const li = document.createElement('li'); li.className = 'snap-item';
                 li.innerHTML = `<span>${snap.name}</span> <span>🔍보기</span>`;
                 li.onclick = () => viewSnapshot(idx);
                 ul.appendChild(li);
@@ -337,27 +336,21 @@
             const layer = document.getElementById('snapshot-layer');
             const container = document.getElementById('snapshot-markers-container');
             container.innerHTML = ''; 
-            
             snap.data.markers.forEach(m => {
-                const el = document.createElement('div');
-                el.className = m.className;
+                const el = document.createElement('div'); el.className = m.className;
                 el.style.left = m.left; el.style.top = m.top; el.innerText = m.text; el.style.position = 'absolute'; el.style.zIndex = '600';
                 container.appendChild(el);
             });
             snap.data.corpses.forEach(c => {
-                const el = document.createElement('div');
-                el.className = 'marker corpse-marker';
-                el.innerHTML = '💀 시체';
+                const el = document.createElement('div'); el.className = 'marker corpse-marker'; el.innerHTML = '💀 시체';
                 el.style.left = c.left; el.style.top = c.top; el.style.transform = 'translate(-50%, -50%)'; el.style.position = 'absolute'; el.style.zIndex = '600';
                 container.appendChild(el);
             });
             layer.style.display = 'block';
         }
-
         function exitSnapshot() { document.getElementById('snapshot-layer').style.display = 'none'; }
 
-
-        // ====== 기존 테이블 및 맵 로직 ======
+        // ====== 테이블 및 맵 로직 ======
         const gooseRoles = ["거위 (Goose)", "한탕주의자 (Gravy)", "엔지니어 (Engineer) 🧭", "경호원 (Bodyguard)", "영매사 (Medium)", "자경단 (Vigilante)", "보안관 (Sheriff)", "캐나다 거위 (Canadian)", "흉내쟁이 (Mimic) 🧭", "탐정 (Detective)", "조류 관찰자 (Birdwatcher) 🧭", "장의사 (Mortician) 🧭", "정치가 (Politician) 🧭", "열쇠공 (Locksmith) 🧭", "연예인 (Celebrity)", "복수자 (Avenger)", "모험가 (Adventurer) 🧭", "차원 여행자 (Astral)", "부랑아 (Street Urchin) 🧭", "추적자 (Tracker) 🧭", "스토커 (Stalker)", "생존주의자 (Survivalist)", "로비스트 (Lobbyist)", "점쟁이 (Fortune Teller) 🧭", "과학자 (Scientist)", "센서 (Sensor) 🧭", "검시관 (Coroner)", "병사 (Soldier)", "루시드 드리머 (Lucid Dreamer)"];
         const duckRoles = ["오리 (Duck)", "식인종 (Cannibal) 🧭", "변장술사 (Morphling) 🧭", "군기반장 (Silencer)", "전문 업자 (Professional)", "청부업자 (Hitman)", "스파이 (Spy)", "암살자 (Assassin)", "밀고자 (Snitch) 🧭", "파티 오리 (Party) 🎤", "폭탄광 (Demolitionist)", "신분 도용범 (Identity Thief) 🧭", "시체 운반자 (Undertaker) 🧭", "닌자 (Ninja) 🧭", "투명 오리 (Invisibility)", "연쇄 살조범 (Serial Killer)", "주술사 (Warlock) 🧭", "초능력자 (Esper)", "전도사 (Preacher)", "드론 (Drone) 🧭", "큐피드 (Cupid) 🧭", "토끼 (Rabbit) 🧭", "마임 (Mime) 🧭", "광대 오리 (Clown)", "약탈자 (Looter) 🧭", "저격수 (Sniper) 🧭", "주술사 (Witch Doctor)", "숙주와 기생충 (Carrier&Parasite)", "길을 잃은 아기 오리 (Lost Duckling) 🧭"];
         const neutralRoles = ["도도새 (Dodo Bird)", "대머리수리 (Vulture) 🧭", "비둘기 (Pigeon)", "송골매 (Falcon)", "결투 도도새 (Dueling Dodos)", "펠리컨 (Pelican)", "매 (Hawk) 🧭", "큰까마귀 (Raven)", "뻐꾸기 (Cuckoo)"];
