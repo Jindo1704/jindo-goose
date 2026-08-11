@@ -8,15 +8,18 @@ app.use(express.static('public'));
 const rooms = {};
 let lobbyChatHistory = []; 
 
+// 무조건 한국 시간(KST)으로 변환해주는 함수
 const getKSTTime = () => {
     return new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
 };
 
-// 🧹 주기적인 채팅 기록 청소 (1분마다 실행)
+// 🧹 주기적인 채팅 기록 청소 (1분마다 검사)
 setInterval(() => {
     const now = Date.now();
+    // 로비 채팅: 1시간(60분 * 60초 * 1000밀리초) 지난 메시지 삭제
     lobbyChatHistory = lobbyChatHistory.filter(chat => now - chat.timestamp < 60 * 60 * 1000);
     
+    // 방 채팅: 30분(30분 * 60초 * 1000밀리초) 지난 메시지 삭제
     for (const roomName in rooms) {
         rooms[roomName].chatHistory = rooms[roomName].chatHistory.filter(chat => now - chat.timestamp < 30 * 60 * 1000);
     }
@@ -24,6 +27,8 @@ setInterval(() => {
 
 io.on('connection', (socket) => {
     socket.join('lobby');
+    
+    // 처음 접속한 사람에게 로비 채팅 기록 쏴주기
     socket.emit('load_lobby_chat_history', lobbyChatHistory);
 
     const sendRoomList = () => {
@@ -42,7 +47,9 @@ io.on('connection', (socket) => {
 
     socket.on('create_room', (data) => {
         if (rooms[data.room]) return socket.emit('room_error', '이미 존재하는 방 이름입니다.');
-        rooms[data.room] = { password: data.password, users: [], snapshots: [], lines: [], chatHistory: [] };
+        
+        // 빈 방 폭파 타이머(emptyTimeout)를 담을 수 있도록 추가
+        rooms[data.room] = { password: data.password, users: [], snapshots: [], lines: [], chatHistory: [], emptyTimeout: null };
         sendRoomList();
         socket.emit('room_created', data.room);
     });
@@ -51,6 +58,12 @@ io.on('connection', (socket) => {
         const room = rooms[data.room];
         if (!room) return socket.emit('room_error', '존재하지 않는 방입니다.');
         if (room.password !== data.password) return socket.emit('room_error', '비밀번호가 틀렸습니다.');
+
+        // ✨ 누군가 방에 들어왔으므로 '5분 폭파 타이머'가 있다면 취소!
+        if (room.emptyTimeout) {
+            clearTimeout(room.emptyTimeout);
+            room.emptyTimeout = null;
+        }
 
         socket.leave('lobby');
         socket.join(data.room);
@@ -128,6 +141,7 @@ io.on('connection', (socket) => {
         if (socket.room && rooms[socket.room]) {
             const room = rooms[socket.room];
             room.users = room.users.filter(u => u.id !== socket.id);
+            
             io.to(socket.room).emit('update_user_list', room.users);
             
             const sysMsg = { sender: '📢 시스템', msg: `${socket.nickname}님이 퇴장하셨습니다.`, color: '#f38ba8', time: getKSTTime(), timestamp: Date.now() };
@@ -135,9 +149,13 @@ io.on('connection', (socket) => {
             io.to(socket.room).emit('receive_chat', sysMsg);
             io.to(socket.room).emit('remove_cursor', socket.id);
             
-            // ✨ [핵심 수정] 이제 혼자 있다가 나가도(새로고침 해도) 방이 폭파되지 않습니다!
-            // if (room.users.length === 0) delete rooms[socket.room]; 
-            
+            // ✨ 혼자 남은 사람이 나갔을 때: 5분(300,000ms) 유예기간 타이머 시작
+            if (room.users.length === 0) {
+                room.emptyTimeout = setTimeout(() => {
+                    delete rooms[socket.room];
+                    sendRoomList(); // 5분 뒤 삭제 후 로비 목록 갱신
+                }, 5 * 60 * 1000);
+            }
             sendRoomList();
         }
     });
