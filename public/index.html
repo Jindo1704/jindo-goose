@@ -117,7 +117,7 @@
                 <div id="current-room-display" class="room-info">접속 중...</div>
             </div>
             <div class="btn-group">
-                <!-- ✨ 지도 선택용 드롭다운 메뉴 (버튼 대신 영구 적용 가능) ✨ -->
+                <!-- 맵 드롭다운 기능 -->
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
                 <select id="map-selector" class="btn-map" style="color:#11111b; padding-right:20px;" onchange="changeMap(this.value)">
                     <option value="image_0a04c3.jpg">🗺️ 맵: 지하실</option>
@@ -201,11 +201,11 @@
         const mapWrapper = document.getElementById('map-wrapper');
         const mapArea = document.getElementById('map-area');
 
-        // ✨ 맵 드롭다운 기능 ✨
+        // 맵 변경 기능
         function changeMap(val) {
             if(val === 'custom') {
                 document.getElementById('map-upload').click();
-                document.getElementById('map-selector').value = 'image_0a04c3.jpg'; // 원래 선택값으로 복구
+                document.getElementById('map-selector').value = 'image_0a04c3.jpg';
             } else {
                 mapImg.src = val;
             }
@@ -483,8 +483,6 @@
         let locOptionsHTML = '<option value="">- 위치 선택 -</option>';
         locations.forEach(loc => locOptionsHTML += `<option value="${loc}">${loc}</option>`);
 
-        const mapWrapper = document.getElementById('map-wrapper');
-
         for(let i = 1; i <= 16; i++) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -500,7 +498,7 @@
             const marker = document.createElement('div');
             marker.className = 'marker'; marker.id = `marker-${i}`; marker.innerText = `${i}`;
             setMarkerInitialPosition(marker, i);
-            mapWrapper.appendChild(marker); 
+            document.getElementById('map-wrapper').appendChild(marker); 
             makeDraggable(marker);
         }
         
@@ -552,7 +550,7 @@
             const corpse = document.createElement('div'); corpse.className = 'marker corpse-marker'; corpse.id = id;
             corpse.innerHTML = `💀 시체 <span class="corpse-close" onclick="emitRemoveCorpse('${id}')">X</span>`;
             corpse.style.left = left; corpse.style.top = top; corpse.style.transform = 'translate(-50%, -50%)';
-            mapWrapper.appendChild(corpse); makeDraggable(corpse);
+            document.getElementById('map-wrapper').appendChild(corpse); makeDraggable(corpse);
         }
         function resetMarkersOnlyUI() {
             for(let i = 1; i <= 16; i++) { setMarkerInitialPosition(document.getElementById(`marker-${i}`), i); document.getElementById(`loc-${i}`).value = ""; }
@@ -580,7 +578,9 @@
             function elementDrag(e) {
                 e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
                 
-                const rect = mapWrapper.getBoundingClientRect();
+                const wrapper = document.getElementById('map-wrapper');
+                const rect = wrapper.getBoundingClientRect();
+                
                 let newTop = elmnt.offsetTop - pos2;
                 let newLeft = elmnt.offsetLeft - pos1;
                 
