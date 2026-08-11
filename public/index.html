@@ -3,61 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>구스구스덕 프라이빗 실시간 트래커</title>
-    <!-- Socket.io 클라이언트 스크립트 추가 -->
+    <title>구스구스덕 실시간 커뮤니티 트래커</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1e1e2e; color: #cdd6f4; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
-        #lobby-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #1e1e2e; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
-        .lobby-box { background-color: #313244; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
-        .lobby-box h1 { color: #f9e2af; margin-bottom: 20px; }
-        .lobby-input { width: 80%; padding: 12px; margin: 10px 0; border: 2px solid #45475a; border-radius: 8px; background-color: #1e1e2e; color: white; font-size: 16px; font-weight: bold; }
+        
+        /* 1. 로비 화면 디자인 */
+        #lobby-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #1e1e2e; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .lobby-box { background-color: #313244; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 700px; display: flex; gap: 30px; }
+        .lobby-section { flex: 1; display: flex; flex-direction: column; }
+        .lobby-section h2 { color: #f9e2af; margin-top: 0; border-bottom: 2px solid #45475a; padding-bottom: 10px; }
+        .lobby-input { width: 90%; padding: 12px; margin: 8px 0; border: 2px solid #45475a; border-radius: 8px; background-color: #1e1e2e; color: white; font-weight: bold; }
         .lobby-input:focus { border-color: #89b4fa; outline: none; }
-        .lobby-btn { background-color: #a6e3a1; color: #11111b; padding: 12px 30px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; transition: 0.2s; }
+        .lobby-btn { background-color: #a6e3a1; color: #11111b; padding: 12px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
         .lobby-btn:hover { background-color: #94d08f; }
+        #room-list-ui { background-color: #1e1e2e; flex: 1; border-radius: 8px; overflow-y: auto; padding: 10px; margin-top: 10px; border: 2px solid #45475a; }
+        .room-item { background-color: #45475a; padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; transition: 0.2s; }
+        .room-item:hover { background-color: #585b70; color: #a6e3a1; }
+
+        /* 2. 메인 앱 화면 */
         #app-container { display: none; flex-direction: column; height: 100%; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        h1 { color: #f9e2af; margin: 0; }
+        h1 { color: #f9e2af; margin: 0; font-size: 24px; }
         .room-info { background-color: #45475a; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
-        .btn-group { display: flex; gap: 8px; }
-        .btn-group button { padding: 10px 15px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; }
-        .btn-reset-all { background-color: #f38ba8; color: #11111b; } .btn-reset-all:hover { background-color: #e67e9c; }
-        .btn-reset-marker { background-color: #fab387; color: #11111b; } .btn-reset-marker:hover { background-color: #eba073; }
-        .btn-corpse { background-color: #a6e3a1; color: #11111b; } .btn-corpse:hover { background-color: #94d08f; }
-        .btn-map { background-color: #89b4fa; color: #11111b; } .btn-copy { background-color: #f5c2e7; color: #11111b; } .btn-copy:hover { background-color: #e5b0d5; }
+        .btn-group button { padding: 8px 12px; margin-left: 5px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+        .btn-reset-all { background-color: #f38ba8; color: #11111b; }
+        .btn-reset-marker { background-color: #fab387; color: #11111b; }
+        .btn-corpse { background-color: #a6e3a1; color: #11111b; }
+        .btn-map { background-color: #89b4fa; color: #11111b; }
+        .btn-copy { background-color: #f5c2e7; color: #11111b; }
+
         .main-container { display: flex; gap: 15px; flex: 1; overflow: hidden; }
-        .table-container { flex: 1.3; overflow-y: auto; background-color: #313244; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 6px; text-align: center; border-bottom: 1px solid #45475a; }
-        th { background-color: #11111b; color: #a6e3a1; position: sticky; top: 0; z-index: 10; font-size: 13px; }
-        input[type="text"] { width: 90%; padding: 5px; border: 1px solid #45475a; border-radius: 4px; background-color: #1e1e2e; color: #cdd6f4; outline: none; font-weight: bold; transition: color 0.3s; }
-        input[type="text"]:focus { border: 1px solid #89b4fa; }
-        select { padding: 5px; border-radius: 4px; border: none; background-color: #1e1e2e; color: white; cursor: pointer; width: 95%; }
-        .role-select { font-weight: bold; }
+        
+        /* 테이블 영역 */
+        .table-container { flex: 1.1; overflow-y: auto; background-color: #313244; border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 4px; text-align: center; border-bottom: 1px solid #45475a; }
+        th { background-color: #11111b; color: #a6e3a1; position: sticky; top: 0; z-index: 10; }
+        input[type="text"] { width: 85%; padding: 4px; border: 1px solid #45475a; border-radius: 4px; background-color: #1e1e2e; color: #cdd6f4; font-weight: bold; }
+        select { padding: 4px; border-radius: 4px; border: none; background-color: #1e1e2e; color: white; width: 95%; font-weight: bold; }
         .role-goose { color: #ffffff !important; } .role-neutral { color: #f9e2af !important; } .role-duck { color: #f38ba8 !important; }
-        option.opt-goose { color: #ffffff; background-color: #313244; } option.opt-neutral { color: #f9e2af; background-color: #313244;} option.opt-duck { color: #f38ba8; background-color: #313244;} option.opt-unknown { color: #cdd6f4; background-color: #313244;}
-        .dead-row { opacity: 0.4; background-color: #4c1d1d !important; }
-        .dead-row input[type="text"], .dead-row select { text-decoration: line-through; color: #f38ba8 !important; }
-        .map-container { flex: 1.7; position: relative; background-color: #11111b; border-radius: 10px; overflow: hidden; border: 2px solid #45475a; display: flex; align-items: center; justify-content: center; }
+        .dead-row { opacity: 0.4; background-color: #4c1d1d !important; } .dead-row input[type="text"], .dead-row select { text-decoration: line-through; color: #f38ba8 !important; }
+
+        /* 지도 영역 */
+        .map-container { flex: 1.4; position: relative; background-color: #11111b; border-radius: 10px; overflow: hidden; border: 2px solid #45475a; display: flex; align-items: center; justify-content: center; }
         .map-container img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-        #map-fallback { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        
+        /* 오른쪽 사이드 패널 (유저, 채팅, 스냅샷) */
+        .side-panel { flex: 0.5; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+        .panel-box { background-color: #313244; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
+        .panel-box h3 { margin: 0 0 10px 0; color: #89b4fa; font-size: 15px; border-bottom: 1px solid #45475a; padding-bottom: 5px; }
+        
+        #user-list-ui { list-style: none; padding: 0; margin: 0; overflow-y: auto; max-height: 100px; }
+        #user-list-ui li { background: #45475a; padding: 5px 10px; border-radius: 5px; margin-bottom: 5px; font-weight: bold; font-size: 13px; }
+        
+        #chat-box { flex: 1; overflow-y: auto; background-color: #1e1e2e; padding: 10px; border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 5px; }
+        .chat-msg { background: #45475a; padding: 6px 10px; border-radius: 12px; width: fit-content; max-width: 90%; word-break: break-all; }
+        .chat-system { color: #f9e2af; font-weight: bold; font-size: 12px; align-self: center; background: none; }
+        
+        #snapshot-list-ui { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+        .snap-item { background: #45475a; padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .snap-item:hover { background: #89b4fa; color: #11111b; font-weight: bold; }
+
+        /* 마커 디자인 */
         .marker { position: absolute; padding: 4px 8px; background-color: #89b4fa; color: #11111b; font-weight: bold; font-size: 12px; border-radius: 20px; border: 2px solid #fff; cursor: grab; box-shadow: 0 2px 5px rgba(0,0,0,0.5); user-select: none; white-space: nowrap; z-index: 100; transition: background-color 0.3s, color 0.3s; }
         .marker:active { cursor: grabbing; z-index: 999; }
         .marker-goose { background-color: #ffffff !important; color: #11111b !important; } .marker-neutral { background-color: #f9e2af !important; color: #11111b !important; border-color: #d4a017; } .marker-duck { background-color: #f38ba8 !important; color: #ffffff !important; border-color: #8a1d3b; }
         .dead-marker { background-color: #45475a !important; color: #a6adc8 !important; text-decoration: line-through; border-color: #f38ba8 !important; }
         .corpse-marker { background-color: #f38ba8 !important; color: #11111b !important; font-size: 14px; border-radius: 5px; border: 2px solid #4c1d1d; }
-        .corpse-close { margin-left: 5px; cursor: pointer; color: #11111b; }
+        
+        /* 스냅샷(과거 기록) 오버레이 */
+        #snapshot-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; z-index: 500; }
+        .return-btn { position: absolute; top: 10px; right: 10px; background-color: #f38ba8; color: white; padding: 10px 20px; font-weight: bold; border-radius: 8px; cursor: pointer; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
+
     <!-- 1. 로비 화면 -->
     <div id="lobby-container">
         <div class="lobby-box">
-            <h1>🦆 구스구스덕 프라이빗 룸</h1>
-            <p style="color: #a6adc8; margin-bottom: 20px;">모임원들과 약속한 방 이름을 입력하세요.</p>
-            <input type="text" id="room-input" class="lobby-input" placeholder="방 이름 (예: jindo_room)">
-            <input type="text" id="nickname-input" class="lobby-input" placeholder="사용할 닉네임">
-            <button class="lobby-btn" onclick="joinRoom()">방 입장하기</button>
+            <div class="lobby-section" style="border-right: 2px solid #45475a; padding-right: 30px;">
+                <h2>✨ 새 방 만들기</h2>
+                <input type="text" id="create-room-name" class="lobby-input" placeholder="방 이름 입력">
+                <input type="password" id="create-room-pw" class="lobby-input" placeholder="비밀번호 설정">
+                <button class="lobby-btn" onclick="createRoom()">방 생성하기</button>
+            </div>
+            <div class="lobby-section">
+                <h2>🚪 방 목록에서 입장</h2>
+                <p style="margin:0; font-size: 13px; color: #a6adc8;">원하는 방을 클릭하여 입장하세요.</p>
+                <div id="room-list-ui">
+                    <!-- 서버에서 받아온 방 목록이 여기에 표시됩니다 -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -72,36 +109,55 @@
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
                 <button class="btn-map" onclick="document.getElementById('map-upload').click()">🗺️ 지도 변경</button>
                 <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체 추가</button>
-                <button class="btn-copy" id="btn-copy-brief" onclick="copyLocationBriefing()">📋 위치 결과 복사</button>
-                <button class="btn-reset-marker" onclick="emitResetMarkers()">📍 마커&위치 초기화</button>
+                <button class="btn-copy" id="btn-copy-brief" onclick="copyLocationBriefing()">📋 결과 복사</button>
+                <button class="btn-reset-marker" onclick="emitResetMarkers()">📍 마커 초기화</button>
                 <button class="btn-reset-all" onclick="emitResetAll()">🔄 전체 초기화</button>
             </div>
         </div>
 
         <div class="main-container">
+            <!-- 왼쪽 표 -->
             <div class="table-container">
                 <table>
                     <thead>
-                        <tr>
-                            <th width="5%">No.</th>
-                            <th width="20%">닉네임</th>
-                            <th width="12%">생존</th>
-                            <th width="26%">직업 선택</th>
-                            <th width="17%">위치</th>
-                            <th width="20%">메모</th>
-                        </tr>
+                        <tr><th width="5%">No.</th><th width="22%">닉네임</th><th width="13%">생존</th><th width="25%">직업</th><th width="15%">위치</th><th width="20%">메모</th></tr>
                     </thead>
                     <tbody id="player-table"></tbody>
                 </table>
             </div>
 
+            <!-- 중앙 미니맵 -->
             <div class="map-container" id="map-area">
-                <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵" onerror="showMapFallback()">
-                <div id="map-fallback" style="display: none;">
-                    <p style="color: #a6adc8; font-size: 18px;">지도를 자동으로 불러오지 못했습니다.</p>
-                    <button class="btn-group btn-map" style="padding: 10px 20px;" onclick="document.getElementById('map-upload').click()">
-                        📁 폴더에서 지도 선택하기
-                    </button>
+                <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵">
+                <!-- 라이브 마커들이 여기 배치됨 -->
+                
+                <!-- 스냅샷(과거 기록) 보기 레이어 -->
+                <div id="snapshot-layer">
+                    <div class="return-btn" onclick="exitSnapshot()">❌ 과거 기록 닫기 (현재로 복귀)</div>
+                    <div id="snapshot-markers-container"></div>
+                </div>
+            </div>
+            
+            <!-- 오른쪽 패널 (명단, 채팅, 스냅샷) -->
+            <div class="side-panel">
+                <div class="panel-box" style="flex: 0.3;">
+                    <h3>👥 접속자 명단 (<span id="user-count">0</span>명)</h3>
+                    <ul id="user-list-ui"></ul>
+                </div>
+                <div class="panel-box" style="flex: 0.4;">
+                    <h3>💬 실시간 채팅</h3>
+                    <div id="chat-box"></div>
+                    <div style="display:flex; gap:5px; margin-top:10px;">
+                        <input type="text" id="chat-input" placeholder="메시지 입력..." style="flex:1;" onkeypress="if(event.key==='Enter') sendChat()">
+                        <button class="btn-map" onclick="sendChat()">전송</button>
+                    </div>
+                </div>
+                <div class="panel-box" style="flex: 0.3;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>📸 미니맵 기록</h3>
+                        <button onclick="saveSnapshot()" class="btn-corpse" style="padding:4px 8px;">💾 현재 저장</button>
+                    </div>
+                    <ul id="snapshot-list-ui"></ul>
                 </div>
             </div>
         </div>
@@ -111,18 +167,140 @@
         const socket = io();
         let currentRoom = "";
         let myName = "";
+        let currentSnapshots = [];
 
-        function joinRoom() {
-            const roomVal = document.getElementById('room-input').value.trim();
-            const nameVal = document.getElementById('nickname-input').value.trim();
-            if(!roomVal || !nameVal) { alert("방 이름과 닉네임을 모두 입력해주세요!"); return; }
-            currentRoom = roomVal; myName = nameVal;
-            socket.emit('join_room', { room: currentRoom, nickname: myName });
-            document.getElementById('lobby-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            document.getElementById('current-room-display').innerText = `📡 ${currentRoom} 방`;
+        // ====== 로비 기능 ======
+        socket.on('room_list', (list) => {
+            const listUI = document.getElementById('room-list-ui');
+            listUI.innerHTML = '';
+            if(list.length === 0) {
+                listUI.innerHTML = '<p style="text-align:center; color:#a6adc8;">현재 생성된 방이 없습니다.</p>';
+            } else {
+                list.forEach(r => {
+                    const el = document.createElement('div');
+                    el.className = 'room-item';
+                    el.innerHTML = `<span>📡 ${r.roomName}</span> <span>👤 ${r.userCount}명</span>`;
+                    el.onclick = () => joinExistingRoom(r.roomName);
+                    listUI.appendChild(el);
+                });
+            }
+        });
+
+        function createRoom() {
+            const roomVal = document.getElementById('create-room-name').value.trim();
+            const pwVal = document.getElementById('create-room-pw').value.trim();
+            if(!roomVal || !pwVal) return alert("방 이름과 비밀번호를 모두 입력하세요!");
+            socket.emit('create_room', { room: roomVal, password: pwVal });
         }
 
+        socket.on('room_created', (roomName) => {
+            alert(`[${roomName}] 방이 생성되었습니다! 목록에서 클릭하여 입장하세요.`);
+            document.getElementById('create-room-name').value = '';
+            document.getElementById('create-room-pw').value = '';
+        });
+
+        function joinExistingRoom(roomName) {
+            const nickname = prompt(`[${roomName}] 방에 입장합니다.\n사용하실 닉네임을 입력하세요:`);
+            if(!nickname) return;
+            const password = prompt(`비밀번호를 입력하세요:`);
+            if(!password) return;
+            socket.emit('join_room', { room: roomName, nickname: nickname.trim(), password: password.trim() });
+        }
+
+        socket.on('room_error', (msg) => alert(msg));
+        socket.on('join_success', (roomName) => {
+            currentRoom = roomName;
+            document.getElementById('lobby-container').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+            document.getElementById('current-room-display').innerText = `📡 ${roomName} 방`;
+        });
+
+        // ====== 사이드 패널 기능 (유저 명단, 채팅) ======
+        socket.on('update_user_list', (users) => {
+            document.getElementById('user-count').innerText = users.length;
+            const ul = document.getElementById('user-list-ui');
+            ul.innerHTML = '';
+            users.forEach(u => {
+                const li = document.createElement('li');
+                li.innerText = '👤 ' + u;
+                ul.appendChild(li);
+            });
+        });
+
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if(!msg) return;
+            socket.emit('send_chat', { msg });
+            input.value = '';
+        }
+
+        socket.on('receive_chat', (data) => {
+            const box = document.getElementById('chat-box');
+            const el = document.createElement('div');
+            if(data.sender.includes('시스템')) {
+                el.className = 'chat-msg chat-system';
+                el.innerText = data.msg;
+            } else {
+                el.className = 'chat-msg';
+                el.innerHTML = `<b style="color:#89b4fa;">${data.sender}</b>: ${data.msg}`;
+            }
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        });
+
+        // ====== 스냅샷 (라운드 저장) 기능 ======
+        function saveSnapshot() {
+            const snapshotData = { markers: [], corpses: [] };
+            for(let i = 1; i <= 16; i++) {
+                const m = document.getElementById(`marker-${i}`);
+                snapshotData.markers.push({ id: i, left: m.style.left, top: m.style.top, text: m.innerText, className: m.className });
+            }
+            document.querySelectorAll('.corpse-marker').forEach(c => {
+                snapshotData.corpses.push({ left: c.style.left, top: c.style.top });
+            });
+            socket.emit('save_snapshot', { snapshotData });
+        }
+
+        socket.on('update_snapshots', (snapshots) => {
+            currentSnapshots = snapshots;
+            const ul = document.getElementById('snapshot-list-ui');
+            ul.innerHTML = '';
+            snapshots.forEach((snap, idx) => {
+                const li = document.createElement('li');
+                li.className = 'snap-item';
+                li.innerHTML = `<span>${snap.name}</span> <span>🔍보기</span>`;
+                li.onclick = () => viewSnapshot(idx);
+                ul.appendChild(li);
+            });
+        });
+
+        function viewSnapshot(idx) {
+            const snap = currentSnapshots[idx];
+            const layer = document.getElementById('snapshot-layer');
+            const container = document.getElementById('snapshot-markers-container');
+            container.innerHTML = ''; // 초기화
+            
+            snap.data.markers.forEach(m => {
+                const el = document.createElement('div');
+                el.className = m.className;
+                el.style.left = m.left; el.style.top = m.top; el.innerText = m.text; el.style.position = 'absolute'; el.style.zIndex = '600';
+                container.appendChild(el);
+            });
+            snap.data.corpses.forEach(c => {
+                const el = document.createElement('div');
+                el.className = 'marker corpse-marker';
+                el.innerHTML = '💀 시체';
+                el.style.left = c.left; el.style.top = c.top; el.style.transform = 'translate(-50%, -50%)'; el.style.position = 'absolute'; el.style.zIndex = '600';
+                container.appendChild(el);
+            });
+            layer.style.display = 'block';
+        }
+
+        function exitSnapshot() { document.getElementById('snapshot-layer').style.display = 'none'; }
+
+
+        // ====== 기존 테이블 및 맵 로직 ======
         const gooseRoles = ["거위 (Goose)", "한탕주의자 (Gravy)", "엔지니어 (Engineer) 🧭", "경호원 (Bodyguard)", "영매사 (Medium)", "자경단 (Vigilante)", "보안관 (Sheriff)", "캐나다 거위 (Canadian)", "흉내쟁이 (Mimic) 🧭", "탐정 (Detective)", "조류 관찰자 (Birdwatcher) 🧭", "장의사 (Mortician) 🧭", "정치가 (Politician) 🧭", "열쇠공 (Locksmith) 🧭", "연예인 (Celebrity)", "복수자 (Avenger)", "모험가 (Adventurer) 🧭", "차원 여행자 (Astral)", "부랑아 (Street Urchin) 🧭", "추적자 (Tracker) 🧭", "스토커 (Stalker)", "생존주의자 (Survivalist)", "로비스트 (Lobbyist)", "점쟁이 (Fortune Teller) 🧭", "과학자 (Scientist)", "센서 (Sensor) 🧭", "검시관 (Coroner)", "병사 (Soldier)", "루시드 드리머 (Lucid Dreamer)"];
         const duckRoles = ["오리 (Duck)", "식인종 (Cannibal) 🧭", "변장술사 (Morphling) 🧭", "군기반장 (Silencer)", "전문 업자 (Professional)", "청부업자 (Hitman)", "스파이 (Spy)", "암살자 (Assassin)", "밀고자 (Snitch) 🧭", "파티 오리 (Party) 🎤", "폭탄광 (Demolitionist)", "신분 도용범 (Identity Thief) 🧭", "시체 운반자 (Undertaker) 🧭", "닌자 (Ninja) 🧭", "투명 오리 (Invisibility)", "연쇄 살조범 (Serial Killer)", "주술사 (Warlock) 🧭", "초능력자 (Esper)", "전도사 (Preacher)", "드론 (Drone) 🧭", "큐피드 (Cupid) 🧭", "토끼 (Rabbit) 🧭", "마임 (Mime) 🧭", "광대 오리 (Clown)", "약탈자 (Looter) 🧭", "저격수 (Sniper) 🧭", "주술사 (Witch Doctor)", "숙주와 기생충 (Carrier&Parasite)", "길을 잃은 아기 오리 (Lost Duckling) 🧭"];
         const neutralRoles = ["도도새 (Dodo Bird)", "대머리수리 (Vulture) 🧭", "비둘기 (Pigeon)", "송골매 (Falcon)", "결투 도도새 (Dueling Dodos)", "펠리컨 (Pelican)", "매 (Hawk) 🧭", "큰까마귀 (Raven)", "뻐꾸기 (Cuckoo)"];
@@ -169,31 +347,10 @@
                 if(field === 'name') document.getElementById(`marker-${id}`).innerText = value.trim() ? `${id}. ${value.trim()}` : `${id}`;
             }
         }
-
-        function emitAddCorpse() {
-            const corpseId = 'corpse-' + Date.now();
-            addCorpseUI(corpseId, '50%', '50%');
-            if(currentRoom) socket.emit('add_corpse', { room: currentRoom, corpseId, left: '50%', top: '50%' });
-        }
-
-        function emitRemoveCorpse(corpseId) {
-            document.getElementById(corpseId).remove();
-            if(currentRoom) socket.emit('remove_corpse', { room: currentRoom, corpseId });
-        }
-
-        function emitResetMarkers() {
-            if(confirm("마커 위치와 선택한 위치를 모두 초기화하시겠습니까?")) {
-                resetMarkersOnlyUI();
-                if(currentRoom) socket.emit('reset_markers', { room: currentRoom });
-            }
-        }
-
-        function emitResetAll() {
-            if(confirm("모든 텍스트 내용과 마커 위치를 초기화하시겠습니까?")) {
-                resetAllUI();
-                if(currentRoom) socket.emit('reset_all', { room: currentRoom });
-            }
-        }
+        function emitAddCorpse() { const corpseId = 'corpse-' + Date.now(); addCorpseUI(corpseId, '50%', '50%'); if(currentRoom) socket.emit('add_corpse', { room: currentRoom, corpseId, left: '50%', top: '50%' }); }
+        function emitRemoveCorpse(corpseId) { document.getElementById(corpseId).remove(); if(currentRoom) socket.emit('remove_corpse', { room: currentRoom, corpseId }); }
+        function emitResetMarkers() { if(confirm("마커와 위치를 모두 초기화하시겠습니까?")) { resetMarkersOnlyUI(); if(currentRoom) socket.emit('reset_markers'); } }
+        function emitResetAll() { if(confirm("모든 내용을 초기화하시겠습니까?")) { resetAllUI(); if(currentRoom) socket.emit('reset_all'); } }
 
         socket.on('receive_input', (data) => {
             const el = document.getElementById(`${data.field}-${data.id}`);
@@ -204,12 +361,7 @@
                 if(data.field === 'status') updateStatus(data.id);
             }
         });
-
-        socket.on('update_marker', (data) => {
-            const marker = document.getElementById(data.markerId);
-            if(marker) { marker.style.top = data.top; marker.style.left = data.left; }
-        });
-
+        socket.on('update_marker', (data) => { const marker = document.getElementById(data.markerId); if(marker) { marker.style.top = data.top; marker.style.left = data.left; } });
         socket.on('receive_add_corpse', (data) => addCorpseUI(data.corpseId, data.left, data.top));
         socket.on('receive_remove_corpse', (data) => { const c = document.getElementById(data.corpseId); if(c) c.remove(); });
         socket.on('receive_reset_markers', () => resetMarkersOnlyUI());
@@ -222,84 +374,61 @@
             else if (val.includes("🔪")) { roleSelect.classList.add('role-duck'); marker.classList.add('marker-duck'); }
             else if (val.includes("🦤")) { roleSelect.classList.add('role-neutral'); marker.classList.add('marker-neutral'); }
         }
-
         function updateStatus(id) {
             const select = document.getElementById(`status-${id}`); const row = select.parentElement.parentElement; const marker = document.getElementById(`marker-${id}`);
-            if (select.value === 'dead') { row.classList.add('dead-row'); marker.classList.add('dead-marker'); }
-            else { row.classList.remove('dead-row'); marker.classList.remove('dead-marker'); }
+            if (select.value === 'dead') { row.classList.add('dead-row'); marker.classList.add('dead-marker'); } else { row.classList.remove('dead-row'); marker.classList.remove('dead-marker'); }
         }
-
         function addCorpseUI(id, left, top) {
             const corpse = document.createElement('div'); corpse.className = 'marker corpse-marker'; corpse.id = id;
             corpse.innerHTML = `💀 시체 <span class="corpse-close" onclick="emitRemoveCorpse('${id}')">X</span>`;
             corpse.style.left = left; corpse.style.top = top; corpse.style.transform = 'translate(-50%, -50%)';
             mapArea.appendChild(corpse); makeDraggable(corpse);
         }
-
         function resetMarkersOnlyUI() {
             for(let i = 1; i <= 16; i++) { setMarkerInitialPosition(document.getElementById(`marker-${i}`), i); document.getElementById(`loc-${i}`).value = ""; }
             document.querySelectorAll('.corpse-marker').forEach(el => el.remove());
         }
-
         function resetAllUI() {
             document.querySelectorAll('input[type="text"]').forEach(inp => { if(!inp.classList.contains('lobby-input')) inp.value = ''; });
             document.querySelectorAll('select').forEach(sel => {
-                if(sel.id.startsWith('status')) sel.value = 'alive';
-                else if(sel.id.startsWith('role')) { sel.value = ''; sel.classList.remove('role-goose', 'role-duck', 'role-neutral'); }
-                else if(sel.id.startsWith('loc')) sel.value = '';
+                if(sel.id.startsWith('status')) sel.value = 'alive'; else if(sel.id.startsWith('role')) { sel.value = ''; sel.classList.remove('role-goose', 'role-duck', 'role-neutral'); } else if(sel.id.startsWith('loc')) sel.value = '';
             });
             for(let i = 1; i <= 16; i++) {
                 const row = document.getElementById(`status-${i}`).parentElement.parentElement; const marker = document.getElementById(`marker-${i}`);
-                row.classList.remove('dead-row'); marker.className = 'marker'; marker.innerText = `${i}`;
-                setMarkerInitialPosition(marker, i);
+                row.classList.remove('dead-row'); marker.className = 'marker'; marker.innerText = `${i}`; setMarkerInitialPosition(marker, i);
             }
             document.querySelectorAll('.corpse-marker').forEach(el => el.remove());
         }
-
         function makeDraggable(elmnt) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
             elmnt.onmousedown = dragMouseDown;
             function dragMouseDown(e) {
-                if(e.target.className === 'corpse-close') return; 
-                e = e || window.event; e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY;
+                if(e.target.className === 'corpse-close') return; e = e || window.event; e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY;
                 document.onmouseup = closeDragElement; document.onmousemove = elementDrag; elmnt.style.transform = 'none';
             }
             function elementDrag(e) {
-                e = e || window.event; e.preventDefault();
-                pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
+                e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
                 elmnt.style.top = (elmnt.offsetTop - pos2) + "px"; elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
                 if(currentRoom) socket.emit('move_marker', { room: currentRoom, markerId: elmnt.id, top: elmnt.style.top, left: elmnt.style.left });
             }
             function closeDragElement() { document.onmouseup = null; document.onmousemove = null; }
         }
-
-        function showMapFallback() { document.getElementById('map-image').style.display = 'none'; document.getElementById('map-fallback').style.display = 'flex'; }
-        function loadMapImage(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) { document.getElementById('map-image').src = e.target.result; document.getElementById('map-image').style.display = 'block'; document.getElementById('map-fallback').style.display = 'none'; }
-                reader.readAsDataURL(file);
-            }
-        }
         function copyLocationBriefing() {
             const locationMap = {}; let hasData = false;
             for(let i = 1; i <= 16; i++) {
                 const loc = document.getElementById(`loc-${i}`).value;
-                if(loc) {
-                    const nickname = document.getElementById(`name-${i}`).value.trim() || `${i}번`; 
-                    if(!locationMap[loc]) locationMap[loc] = [];
-                    locationMap[loc].push(nickname); hasData = true;
-                }
+                if(loc) { const nickname = document.getElementById(`name-${i}`).value.trim() || `${i}번`; if(!locationMap[loc]) locationMap[loc] = []; locationMap[loc].push(nickname); hasData = true; }
             }
             if(!hasData) return alert("선택된 위치가 없습니다!");
-            let resultText = "";
-            for(const loc in locationMap) resultText += `${loc}: ${locationMap[loc].join(', ')}\n`;
+            let resultText = ""; for(const loc in locationMap) resultText += `${loc}: ${locationMap[loc].join(', ')}\n`;
             navigator.clipboard.writeText(resultText.trim()).then(() => {
-                const btn = document.getElementById('btn-copy-brief'); const originalText = btn.innerText;
-                btn.innerText = "✔️ 복사 완료!"; btn.style.backgroundColor = "#a6e3a1"; 
+                const btn = document.getElementById('btn-copy-brief'); const originalText = btn.innerText; btn.innerText = "✔️ 복사 완료!"; btn.style.backgroundColor = "#a6e3a1"; 
                 setTimeout(() => { btn.innerText = originalText; btn.style.backgroundColor = ""; }, 2000);
             }).catch(err => alert(`복사에 실패했습니다.\n\n${resultText}`));
+        }
+        function loadMapImage(event) {
+            const file = event.target.files[0];
+            if (file) { const reader = new FileReader(); reader.onload = function(e) { document.getElementById('map-image').src = e.target.result; }; reader.readAsDataURL(file); }
         }
     </script>
 </body>
