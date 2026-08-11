@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>구스구스덕 실시간 커뮤니티 트래커</title>
-    <!-- 기본 통신 방식으로 복구하여 연결 실패 방지 -->
+    <!-- 초고속 연결 강제 고정 -->
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1e1e2e; color: #cdd6f4; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; overflow: hidden; }
@@ -23,9 +23,9 @@
         .lobby-btn:hover { background-color: #94d08f; }
         .lobby-btn:disabled { background-color: #585b70; cursor: not-allowed; }
         
-        #room-list-ui { background-color: #1e1e2e; flex: 1; border-radius: 8px; overflow-y: auto; padding: 10px; border: 2px solid #45475a; }
-        .room-item { background-color: #45475a; padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; transition: 0.2s; }
-        .room-item:hover { background-color: #585b70; color: #a6e3a1; }
+        #room-list-ui { background-color: #1e1e2e; flex: 1; border-radius: 8px; overflow-y: auto; padding: 10px; border: 2px solid #45475a; display: flex; flex-direction: column; gap: 8px; }
+        .room-item { background-color: #45475a; padding: 12px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; transition: 0.2s; font-size: 15px; }
+        .room-item:hover { background-color: #89b4fa; color: #11111b; }
 
         .chat-box-area { flex: 1; overflow-y: auto; background-color: #1e1e2e; padding: 10px; border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 5px; border: 2px solid #45475a; }
         .chat-msg { background: #45475a; padding: 6px 10px; border-radius: 12px; width: fit-content; max-width: 90%; word-break: break-all; }
@@ -104,14 +104,9 @@
             <div class="lobby-section" style="flex: 1.2; border-right: 2px solid #45475a; padding-right: 20px;">
                 <h2>👤 1. 닉네임 설정</h2>
                 <input type="text" id="global-nickname" class="lobby-input" placeholder="사용할 닉네임 (입력 필수!)">
-                <h2 style="margin-top: 15px;">✨ 2. 새 방 만들기</h2>
-                <div style="display:flex; gap:5px;">
-                    <input type="text" id="create-room-name" class="lobby-input" style="flex:1;" placeholder="방 이름">
-                    <input type="password" id="create-room-pw" class="lobby-input" style="flex:1;" placeholder="비밀번호">
-                </div>
-                <!-- ID 추가 및 비활성화 상태 추가 -->
-                <button class="lobby-btn" id="btn-create-room" onclick="createRoom()" disabled>방 생성하기</button>
-                <h2 style="margin-top: 15px;">🚪 3. 방 목록에서 입장</h2>
+                
+                <h2 style="margin-top: 25px;">🚪 2. 방 목록에서 입장</h2>
+                <p style="color:#a6adc8; font-size:13px; margin:0 0 10px 0;">1번부터 10번 방이 항상 열려 있습니다. 원하는 방을 클릭하세요.</p>
                 <div id="room-list-ui"></div>
             </div>
             <div class="lobby-section" style="flex: 1; padding-left: 10px;">
@@ -205,14 +200,13 @@
     </div>
 
     <script>
-        const socket = io();
+        const socket = io({ transports: ['websocket'] });
         let isConnected = false;
         let currentRoom = "";
         let myName = "";
         const myColor = 'hsl(' + Math.floor(Math.random() * 360) + ', 80%, 70%)';
         let currentSnapshots = [];
 
-        // ✨ 작성자님 아이디어 적용: 시스템 채팅 출력기
         function addLobbySystemMsg(msg, color="#f9e2af") {
             const box = document.getElementById('lobby-chat-box'); 
             if(!box) return;
@@ -223,7 +217,6 @@
 
         addLobbySystemMsg("⏳ 실시간 서버와 연결을 시도 중입니다...", "#f9e2af");
 
-        // ✨ 스마트 자동 새로고침 (15초 대기 후 무응답 시 새로고침)
         let forceReloadTimer = setTimeout(() => {
             if(!isConnected) {
                 addLobbySystemMsg("⚠️ 서버 응답이 없습니다. 잠시 후 자동으로 새로고침합니다...", "#fab387");
@@ -233,16 +226,14 @@
 
         socket.on('connect', () => {
             isConnected = true;
-            clearTimeout(forceReloadTimer); // 연결 성공 시 타이머 취소
+            clearTimeout(forceReloadTimer);
             document.getElementById('server-loading').style.display = 'none';
-            document.getElementById('btn-create-room').disabled = false;
             document.getElementById('btn-send-lobby').disabled = false;
-            addLobbySystemMsg("🟢 연결 성공! 이제 방 생성 및 입장, 채팅이 가능합니다.", "#a6e3a1");
+            addLobbySystemMsg("🟢 연결 성공! 이제 방 입장 및 채팅이 가능합니다.", "#a6e3a1");
         });
 
         socket.on('disconnect', () => {
             isConnected = false;
-            document.getElementById('btn-create-room').disabled = true;
             document.getElementById('btn-send-lobby').disabled = true;
             document.getElementById('server-loading').style.display = 'flex';
             document.getElementById('server-loading').innerHTML = `
@@ -251,8 +242,6 @@
                 <p style="color: #a6adc8; font-size: 14px; margin-top: 10px;">자동으로 재접속을 시도합니다...</p>
             `;
             addLobbySystemMsg("🔴 연결이 끊겼습니다! 3초 뒤 자동 새로고침 됩니다...", "#f38ba8");
-            
-            // 끊기면 3초 뒤 자동 새로고침
             setTimeout(() => { if(!isConnected) window.location.reload(); }, 3000);
         });
 
@@ -311,16 +300,14 @@
         socket.on('room_list', (list) => {
             const listUI = document.getElementById('room-list-ui');
             listUI.innerHTML = '';
-            if(list.length === 0) {
-                listUI.innerHTML = '<p style="text-align:center; color:#a6adc8; margin-top:30px;">생성된 방이 없습니다.</p>';
-            } else {
-                list.forEach(r => {
-                    const el = document.createElement('div'); el.className = 'room-item';
-                    el.innerHTML = `<span>📡 ${r.roomName}</span> <span>👤 ${r.userCount}명</span>`;
-                    el.onclick = () => joinExistingRoom(r.roomName);
-                    listUI.appendChild(el);
-                });
-            }
+            
+            // 1번부터 10번 방이 번호순으로 정렬되어 보이게 함
+            list.sort((a, b) => parseInt(a.roomName) - parseInt(b.roomName)).forEach(r => {
+                const el = document.createElement('div'); el.className = 'room-item';
+                el.innerHTML = `<span>📡 ${r.roomName}</span> <span>👤 ${r.userCount}명</span>`;
+                el.onclick = () => joinExistingRoom(r.roomName);
+                listUI.appendChild(el);
+            });
         });
 
         function getNickname() {
@@ -329,29 +316,13 @@
             return name;
         }
 
-        function createRoom() {
-            if(!isConnected) return alert("⏳ 서버 연결 중입니다. 잠시만 기다려주세요!");
-            const nickname = getNickname();
-            if(!nickname) return;
-            const roomVal = document.getElementById('create-room-name').value.trim();
-            const pwVal = document.getElementById('create-room-pw').value.trim();
-            if(!roomVal || !pwVal) return alert("방 이름과 비밀번호를 모두 입력하세요!");
-            socket.emit('create_room', { room: roomVal, password: pwVal });
-        }
-
-        socket.on('room_created', (roomName) => {
-            alert(`[${roomName}] 방이 생성되었습니다! 목록에서 클릭하여 입장하세요.`);
-            document.getElementById('create-room-name').value = ''; document.getElementById('create-room-pw').value = '';
-        });
-
+        // 비밀번호 없이 닉네임만 확인하고 바로 입장!
         function joinExistingRoom(roomName) {
             if(!isConnected) return alert("⏳ 서버 연결 중입니다. 잠시만 기다려주세요!");
             const nickname = getNickname();
             if(!nickname) return;
-            const password = prompt(`[${roomName}] 방 비밀번호를 입력하세요:`);
-            if(password === null) return;
             myName = nickname;
-            socket.emit('join_room', { room: roomName, nickname: nickname, password: password.trim(), color: myColor });
+            socket.emit('join_room', { room: roomName, nickname: nickname, color: myColor });
         }
 
         socket.on('room_error', (msg) => alert(msg));
