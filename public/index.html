@@ -28,11 +28,11 @@
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         h1 { color: #f9e2af; margin: 0; font-size: 22px; }
         .room-info { background-color: #45475a; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
-        .btn-group button { padding: 6px 10px; margin-left: 4px; font-size: 13px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+        .btn-group button, .btn-group select { padding: 6px 10px; margin-left: 4px; font-size: 13px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
         
         .btn-pen { background-color: #f9e2af; color: #11111b; } .btn-clear-pen { background-color: #bac2de; color: #11111b; }
         .btn-reset-all { background-color: #f38ba8; color: #11111b; } .btn-reset-marker { background-color: #fab387; color: #11111b; }
-        .btn-corpse { background-color: #a6e3a1; color: #11111b; } .btn-map { background-color: #89b4fa; color: #11111b; } .btn-copy { background-color: #f5c2e7; color: #11111b; }
+        .btn-corpse { background-color: #a6e3a1; color: #11111b; } .btn-map { background-color: #89b4fa; color: #11111b; outline: none; } .btn-copy { background-color: #f5c2e7; color: #11111b; }
 
         .main-container { display: flex; gap: 15px; flex: 1; overflow: hidden; }
         
@@ -47,8 +47,8 @@
 
         .map-container { flex: 1.4; position: relative; background-color: #11111b; border-radius: 10px; overflow: hidden; border: 2px solid #45475a; display: flex; align-items: center; justify-content: center; }
         
-        #map-wrapper { position: relative; max-width: 100%; max-height: 100%; margin: auto; }
-        #map-wrapper img { width: 100%; height: 100%; display: block; }
+        #map-wrapper { position: relative; max-width: 100%; max-height: 100%; display: none; }
+        #map-image { width: 100%; height: 100%; display: block; object-fit: contain; }
         
         #drawing-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
         #drawing-canvas.pen-active { pointer-events: auto; cursor: crosshair; touch-action: none; }
@@ -79,6 +79,8 @@
 
         .remote-cursor { position: absolute; pointer-events: none; z-index: 10000; opacity: 0.75; transition: left 0.05s linear, top 0.05s linear; display: flex; flex-direction: column; align-items: flex-start; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }
         .cursor-name { margin-top: -5px; margin-left: 10px; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: #11111b; white-space: nowrap; }
+
+        #map-fallback { position: absolute; top:0; left:0; width: 100%; height: 100%; background: #11111b; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
     </style>
 </head>
 <body>
@@ -115,10 +117,16 @@
                 <div id="current-room-display" class="room-info">접속 중...</div>
             </div>
             <div class="btn-group">
+                <!-- ✨ 지도 선택용 드롭다운 메뉴 (버튼 대신 영구 적용 가능) ✨ -->
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
+                <select id="map-selector" class="btn-map" style="color:#11111b; padding-right:20px;" onchange="changeMap(this.value)">
+                    <option value="image_0a04c3.jpg">🗺️ 맵: 지하실</option>
+                    <option value="custom">📁 내 PC에서 열기</option>
+                </select>
+                
                 <button class="btn-pen" id="btn-pen-toggle" onclick="togglePen()">🖍️ 펜 켜기</button>
                 <button class="btn-clear-pen" onclick="emitClearCanvas()">🗑️ 선 지우기</button>
-                <button class="btn-map" onclick="toggleFullscreenMap()">🔍 지도 꽉차게</button>
+                <button class="btn-map" style="background-color:#cba6f7;" onclick="toggleFullscreenMap()">🔍 맵 꽉차게</button>
                 
                 <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체</button>
                 <button class="btn-copy" id="btn-copy-brief" onclick="copyLocationBriefing()">📋 결과 복사</button>
@@ -138,8 +146,16 @@
             <div class="map-container" id="map-area">
                 <button id="btn-exit-fullscreen" class="btn-corpse" style="display:none; position:absolute; top:20px; right:20px; z-index:10001; padding:12px 20px; font-size:16px;" onclick="toggleFullscreenMap()">❌ 맵 작게보기</button>
                 
+                <div id="map-fallback">
+                    <p style="color: #f38ba8; font-size: 22px; font-weight: bold; margin-bottom: 5px;">⚠️ 지도 이미지를 찾을 수 없습니다!</p>
+                    <p style="color: #a6adc8; font-size: 15px; text-align: center; line-height: 1.5; margin-bottom: 20px;">
+                        깃허브(GitHub)의 <b>public 폴더</b> 안에 <code>image_0a04c3.jpg</code> 파일이 있는지 확인해 주세요.<br>
+                        또는 우측 상단의 <b style="color: #89b4fa;">[🗺️ 맵 선택]</b> 메뉴에서 <b style="color: #89b4fa;">[📁 내 PC에서 열기]</b>를 선택해 직접 불러올 수 있습니다.
+                    </p>
+                </div>
+
                 <div id="map-wrapper">
-                    <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵">
+                    <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵" onerror="showMapFallback()">
                     <canvas id="drawing-canvas"></canvas>
                     
                     <div id="snapshot-layer">
@@ -182,26 +198,56 @@
         let currentSnapshots = [];
 
         const mapImg = document.getElementById('map-image');
+        const mapWrapper = document.getElementById('map-wrapper');
+        const mapArea = document.getElementById('map-area');
+
+        // ✨ 맵 드롭다운 기능 ✨
+        function changeMap(val) {
+            if(val === 'custom') {
+                document.getElementById('map-upload').click();
+                document.getElementById('map-selector').value = 'image_0a04c3.jpg'; // 원래 선택값으로 복구
+            } else {
+                mapImg.src = val;
+            }
+        }
+
         function applyMapAspectRatio() {
             if(mapImg.naturalWidth) {
-                document.getElementById('map-wrapper').style.aspectRatio = mapImg.naturalWidth + ' / ' + mapImg.naturalHeight;
+                document.getElementById('map-fallback').style.display = 'none';
+                mapWrapper.style.display = 'block';
+
+                const imgRatio = mapImg.naturalWidth / mapImg.naturalHeight;
+                const areaRatio = mapArea.clientWidth / mapArea.clientHeight;
+                
+                if(imgRatio > areaRatio) {
+                    mapWrapper.style.width = '100%'; mapWrapper.style.height = 'auto';
+                } else {
+                    mapWrapper.style.width = 'auto'; mapWrapper.style.height = '100%';
+                }
+                mapWrapper.style.aspectRatio = imgRatio;
                 resizeCanvas();
             }
         }
+        
         mapImg.addEventListener('load', applyMapAspectRatio);
+        window.addEventListener('resize', applyMapAspectRatio);
         if(mapImg.complete) applyMapAspectRatio();
 
+        function showMapFallback() {
+            document.getElementById('map-fallback').style.display = 'flex';
+            mapWrapper.style.display = 'none';
+        }
+
         function toggleFullscreenMap() {
-            const mapContainer = document.getElementById('map-area');
             const exitBtn = document.getElementById('btn-exit-fullscreen');
-            if(mapContainer.classList.contains('fullscreen-mode')) {
-                mapContainer.classList.remove('fullscreen-mode');
+            if(mapArea.classList.contains('fullscreen-mode')) {
+                mapArea.classList.remove('fullscreen-mode');
                 exitBtn.style.display = 'none';
             } else {
-                mapContainer.classList.add('fullscreen-mode');
+                mapArea.classList.add('fullscreen-mode');
                 exitBtn.style.display = 'block';
             }
-            setTimeout(resizeCanvas, 50); 
+            setTimeout(applyMapAspectRatio, 50); 
         }
 
         socket.on('room_list', (list) => {
@@ -276,14 +322,12 @@
         let allLines = []; let isDrawing = false; let lastX = 0, lastY = 0;
 
         function resizeCanvas() {
-            const wrapper = document.getElementById('map-wrapper');
-            const rect = wrapper.getBoundingClientRect();
+            const rect = mapWrapper.getBoundingClientRect();
             if(drawingCanvas.width !== rect.width || drawingCanvas.height !== rect.height) {
                 drawingCanvas.width = rect.width; drawingCanvas.height = rect.height;
                 redrawCanvas();
             }
         }
-        window.addEventListener('resize', resizeCanvas);
 
         function togglePen() {
             isPenMode = !isPenMode;
@@ -333,8 +377,7 @@
         let lastMouseTime = 0;
         document.addEventListener('mousemove', (e) => {
             if(currentRoom && Date.now() - lastMouseTime > 50) {
-                const wrapper = document.getElementById('map-wrapper');
-                const rect = wrapper.getBoundingClientRect();
+                const rect = mapWrapper.getBoundingClientRect();
                 let xRatio = (e.clientX - rect.left) / rect.width;
                 let yRatio = (e.clientY - rect.top) / rect.height;
                 socket.emit('mouse_move', { x: xRatio, y: yRatio }); 
@@ -347,7 +390,7 @@
             if(!cursor) {
                 cursor = document.createElement('div'); cursor.id = 'cursor-' + data.id; cursor.className = 'remote-cursor';
                 cursor.innerHTML = `<svg width="20" height="25" viewBox="0 0 15 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L14 10L8 12L1 20V1Z" fill="${data.color}" stroke="white" stroke-width="1.5"/></svg><div class="cursor-name" style="background-color: ${data.color};">${data.nickname}</div>`;
-                document.getElementById('map-wrapper').appendChild(cursor);
+                mapWrapper.appendChild(cursor);
             }
             cursor.style.left = (data.x * 100) + '%'; cursor.style.top = (data.y * 100) + '%';
         });
@@ -461,7 +504,6 @@
             makeDraggable(marker);
         }
         
-        // ✨ 전체화면 모드에서도 비율이 꼬이지 않게 픽셀(px)값으로 좁게 배치 ✨
         function setMarkerInitialPosition(marker, i) {
             const col = (i - 1) % 8; const rowIdx = Math.floor((i - 1) / 8);
             marker.style.left = `${10 + (col * 42)}px`; 
@@ -510,7 +552,7 @@
             const corpse = document.createElement('div'); corpse.className = 'marker corpse-marker'; corpse.id = id;
             corpse.innerHTML = `💀 시체 <span class="corpse-close" onclick="emitRemoveCorpse('${id}')">X</span>`;
             corpse.style.left = left; corpse.style.top = top; corpse.style.transform = 'translate(-50%, -50%)';
-            document.getElementById('map-wrapper').appendChild(corpse); makeDraggable(corpse);
+            mapWrapper.appendChild(corpse); makeDraggable(corpse);
         }
         function resetMarkersOnlyUI() {
             for(let i = 1; i <= 16; i++) { setMarkerInitialPosition(document.getElementById(`marker-${i}`), i); document.getElementById(`loc-${i}`).value = ""; }
@@ -538,9 +580,7 @@
             function elementDrag(e) {
                 e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
                 
-                const wrapper = document.getElementById('map-wrapper');
-                const rect = wrapper.getBoundingClientRect();
-                
+                const rect = mapWrapper.getBoundingClientRect();
                 let newTop = elmnt.offsetTop - pos2;
                 let newLeft = elmnt.offsetLeft - pos1;
                 
@@ -571,9 +611,8 @@
             if (file) { 
                 const reader = new FileReader(); 
                 reader.onload = function(e) { 
-                    const img = document.getElementById('map-image'); 
-                    img.src = e.target.result; 
-                    img.onload = applyMapAspectRatio;
+                    mapImg.src = e.target.result; 
+                    mapImg.onload = applyMapAspectRatio;
                 }; 
                 reader.readAsDataURL(file); 
             }
