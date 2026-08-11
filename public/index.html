@@ -46,11 +46,17 @@
         .dead-row { opacity: 0.4; background-color: #4c1d1d !important; } .dead-row input[type="text"], .dead-row select { text-decoration: line-through; color: #f38ba8 !important; }
 
         .map-container { flex: 1.4; position: relative; background-color: #11111b; border-radius: 10px; overflow: hidden; border: 2px solid #45475a; display: flex; align-items: center; justify-content: center; }
-        .map-container img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
         
-        /* ✨ 펜 툴 그리기 캔버스 CSS 추가 */
+        /* ✨ 새로 추가된 지도 비율 고정 래퍼 (비율 유지 핵심) ✨ */
+        #map-wrapper { position: relative; max-width: 100%; max-height: 100%; margin: auto; }
+        #map-wrapper img { width: 100%; height: 100%; display: block; }
+        
+        /* 캔버스 및 레이어들이 map-wrapper에 딱 맞게 고정됨 */
         #drawing-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
         #drawing-canvas.pen-active { pointer-events: auto; cursor: crosshair; touch-action: none; }
+        
+        /* 전체화면(확대) 모드 CSS */
+        .fullscreen-mode { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; z-index: 9999; background-color: #11111b; border: none !important; border-radius: 0 !important; }
         
         .side-panel { flex: 0.5; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
         .panel-box { background-color: #313244; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
@@ -112,9 +118,12 @@
                 <div id="current-room-display" class="room-info">접속 중...</div>
             </div>
             <div class="btn-group">
-                <!-- ✨ 상단 버튼 메뉴에 펜 툴과 선 지우기 추가 -->
+                <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
                 <button class="btn-pen" id="btn-pen-toggle" onclick="togglePen()">🖍️ 펜 켜기</button>
                 <button class="btn-clear-pen" onclick="emitClearCanvas()">🗑️ 선 지우기</button>
+                <!-- ✨ 전체화면 버튼 추가 -->
+                <button class="btn-map" onclick="toggleFullscreenMap()">🔍 지도 꽉차게</button>
+                
                 <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체</button>
                 <button class="btn-copy" id="btn-copy-brief" onclick="copyLocationBriefing()">📋 결과 복사</button>
                 <button class="btn-reset-marker" onclick="emitResetMarkers()">📍 마커 초기화</button>
@@ -130,15 +139,23 @@
                 </table>
             </div>
 
+            <!-- 지도 컨테이너 -->
             <div class="map-container" id="map-area">
-                <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵">
-                <!-- ✨ 그림을 그리는 투명 캔버스 도화지 -->
-                <canvas id="drawing-canvas"></canvas>
+                <!-- 전체화면 닫기 버튼 (숨겨져 있음) -->
+                <button id="btn-exit-fullscreen" class="btn-corpse" style="display:none; position:absolute; top:20px; right:20px; z-index:10001; padding:12px 20px; font-size:16px;" onclick="toggleFullscreenMap()">❌ 맵 작게보기</button>
                 
-                <div id="snapshot-layer">
-                    <div class="return-btn" onclick="exitSnapshot()">❌ 과거 기록 닫기 (현재로 복귀)</div>
-                    <canvas id="snapshot-canvas"></canvas>
-                    <div id="snapshot-markers-container"></div>
+                <!-- 지도의 원본 비율을 고정하여 뒤틀림을 방지하는 Wrapper -->
+                <div id="map-wrapper">
+                    <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵">
+                    <canvas id="drawing-canvas"></canvas>
+                    
+                    <div id="snapshot-layer">
+                        <div class="return-btn" onclick="exitSnapshot()">❌ 과거 기록 닫기 (현재로 복귀)</div>
+                        <canvas id="snapshot-canvas"></canvas>
+                        <div id="snapshot-markers-container"></div>
+                    </div>
+                    
+                    <!-- 마커들이 이 map-wrapper 안에 % 비율로 생성됨 -->
                 </div>
             </div>
             
@@ -173,6 +190,32 @@
         const myColor = 'hsl(' + Math.floor(Math.random() * 360) + ', 80%, 70%)';
         let currentSnapshots = [];
 
+        // ====== 지도 비율 유지 (뒤틀림 방지 핵심) ======
+        const mapImg = document.getElementById('map-image');
+        function applyMapAspectRatio() {
+            if(mapImg.naturalWidth) {
+                document.getElementById('map-wrapper').style.aspectRatio = mapImg.naturalWidth + ' / ' + mapImg.naturalHeight;
+                resizeCanvas();
+            }
+        }
+        mapImg.addEventListener('load', applyMapAspectRatio);
+        if(mapImg.complete) applyMapAspectRatio();
+
+        // ====== 확대(전체화면) 기능 ======
+        function toggleFullscreenMap() {
+            const mapContainer = document.getElementById('map-area');
+            const exitBtn = document.getElementById('btn-exit-fullscreen');
+            if(mapContainer.classList.contains('fullscreen-mode')) {
+                mapContainer.classList.remove('fullscreen-mode');
+                exitBtn.style.display = 'none';
+            } else {
+                mapContainer.classList.add('fullscreen-mode');
+                exitBtn.style.display = 'block';
+            }
+            // 확대/축소 애니메이션 직후 캔버스 좌표 재설정
+            setTimeout(resizeCanvas, 50); 
+        }
+
         // ====== 로비 기능 ======
         socket.on('room_list', (list) => {
             const listUI = document.getElementById('room-list-ui');
@@ -206,8 +249,7 @@
 
         socket.on('room_created', (roomName) => {
             alert(`[${roomName}] 방이 생성되었습니다! 목록에서 클릭하여 입장하세요.`);
-            document.getElementById('create-room-name').value = '';
-            document.getElementById('create-room-pw').value = '';
+            document.getElementById('create-room-name').value = ''; document.getElementById('create-room-pw').value = '';
         });
 
         function joinExistingRoom(roomName) {
@@ -225,9 +267,7 @@
             document.getElementById('lobby-container').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
             document.getElementById('current-room-display').innerHTML = `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${myColor}; margin-right:5px; border:1px solid #fff;"></span> ${myName} (📡 ${roomName})`;
-            
-            // 캔버스 크기 맞춤
-            setTimeout(resizeCanvas, 300);
+            applyMapAspectRatio();
         });
 
         function sendLobbyChat() {
@@ -243,16 +283,15 @@
             box.appendChild(el); box.scrollTop = box.scrollHeight;
         });
 
-        // ====== 🖍️ 펜 툴 그리기 로직 ======
+        // ====== 🖍️ 펜 툴 그리기 로직 (비율 기반) ======
         let isPenMode = false;
         const drawingCanvas = document.getElementById('drawing-canvas');
         const ctx = drawingCanvas.getContext('2d');
-        let allLines = [];
-        let isDrawing = false;
-        let lastX = 0, lastY = 0;
+        let allLines = []; let isDrawing = false; let lastX = 0, lastY = 0;
 
         function resizeCanvas() {
-            const rect = drawingCanvas.getBoundingClientRect();
+            const wrapper = document.getElementById('map-wrapper');
+            const rect = wrapper.getBoundingClientRect();
             if(drawingCanvas.width !== rect.width || drawingCanvas.height !== rect.height) {
                 drawingCanvas.width = rect.width; drawingCanvas.height = rect.height;
                 redrawCanvas();
@@ -264,15 +303,11 @@
             isPenMode = !isPenMode;
             const btn = document.getElementById('btn-pen-toggle');
             if(isPenMode) {
-                drawingCanvas.classList.add('pen-active');
-                resizeCanvas();
-                btn.innerText = '🖍️ 펜 끄기';
-                btn.style.backgroundColor = '#a6e3a1'; // 활성화 시 초록색
+                drawingCanvas.classList.add('pen-active'); resizeCanvas();
+                btn.innerText = '🖍️ 펜 끄기'; btn.style.backgroundColor = '#a6e3a1';
             } else {
                 drawingCanvas.classList.remove('pen-active');
-                btn.innerText = '🖍️ 펜 켜기';
-                btn.style.backgroundColor = '#f9e2af';
-                isDrawing = false;
+                btn.innerText = '🖍️ 펜 켜기'; btn.style.backgroundColor = '#f9e2af'; isDrawing = false;
             }
         }
 
@@ -283,71 +318,43 @@
             return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
         }
 
-        function startDraw(e) {
-            if(!isPenMode) return;
-            isDrawing = true;
-            const pos = getCanvasPos(e);
-            lastX = pos.x; lastY = pos.y;
-        }
-
+        function startDraw(e) { if(!isPenMode) return; isDrawing = true; const pos = getCanvasPos(e); lastX = pos.x; lastY = pos.y; }
         function drawPath(e) {
             if(!isDrawing) return;
-            e.preventDefault(); // 스크롤 방지
-            const pos = getCanvasPos(e);
+            e.preventDefault(); const pos = getCanvasPos(e);
             drawLineLocally(lastX, lastY, pos.x, pos.y, myColor, true);
             socket.emit('draw_line', { x0: lastX, y0: lastY, x1: pos.x, y1: pos.y, color: myColor });
             lastX = pos.x; lastY = pos.y;
         }
-
         function endDraw() { isDrawing = false; }
 
-        drawingCanvas.addEventListener('mousedown', startDraw);
-        drawingCanvas.addEventListener('mousemove', drawPath);
-        window.addEventListener('mouseup', endDraw);
-        drawingCanvas.addEventListener('touchstart', startDraw, {passive: false});
-        drawingCanvas.addEventListener('touchmove', drawPath, {passive: false});
-        window.addEventListener('touchend', endDraw);
+        drawingCanvas.addEventListener('mousedown', startDraw); drawingCanvas.addEventListener('mousemove', drawPath); window.addEventListener('mouseup', endDraw);
+        drawingCanvas.addEventListener('touchstart', startDraw, {passive: false}); drawingCanvas.addEventListener('touchmove', drawPath, {passive: false}); window.addEventListener('touchend', endDraw);
 
         function drawLineLocally(x0, y0, x1, y1, color, save=true) {
             if(save) allLines.push({x0, y0, x1, y1, color});
-            ctx.beginPath();
-            ctx.moveTo(x0 * drawingCanvas.width, y0 * drawingCanvas.height);
-            ctx.lineTo(x1 * drawingCanvas.width, y1 * drawingCanvas.height);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x0 * drawingCanvas.width, y0 * drawingCanvas.height); ctx.lineTo(x1 * drawingCanvas.width, y1 * drawingCanvas.height);
+            ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke();
         }
+        function redrawCanvas() { ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height); allLines.forEach(l => drawLineLocally(l.x0, l.y0, l.x1, l.y1, l.color, false)); }
+        function clearCanvasLocally() { allLines = []; ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height); }
+        function emitClearCanvas() { if(confirm("맵 위에 그려진 모든 선을 지우시겠습니까?")) { clearCanvasLocally(); socket.emit('clear_canvas'); } }
 
-        function redrawCanvas() {
-            ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-            allLines.forEach(l => drawLineLocally(l.x0, l.y0, l.x1, l.y1, l.color, false));
-        }
-
-        function clearCanvasLocally() {
-            allLines = []; ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-        }
-
-        function emitClearCanvas() {
-            if(confirm("맵 위에 그려진 모든 선을 지우시겠습니까?")) {
-                clearCanvasLocally(); socket.emit('clear_canvas');
-            }
-        }
-
-        socket.on('init_canvas', (lines) => {
-            allLines = lines || [];
-            setTimeout(resizeCanvas, 300);
-        });
-
+        socket.on('init_canvas', (lines) => { allLines = lines || []; setTimeout(resizeCanvas, 300); });
         socket.on('receive_draw_line', (data) => drawLineLocally(data.x0, data.y0, data.x1, data.y1, data.color, true));
         socket.on('receive_clear_canvas', () => clearCanvasLocally());
 
-        // ====== 실시간 마우스 커서 전송 ======
+        // ====== 실시간 마우스 커서 전송 (비율 기반 동기화) ======
         let lastMouseTime = 0;
         document.addEventListener('mousemove', (e) => {
             if(currentRoom && Date.now() - lastMouseTime > 50) {
-                const x = (e.pageX / window.innerWidth) * 100; const y = (e.pageY / window.innerHeight) * 100;
-                socket.emit('mouse_move', { x, y }); lastMouseTime = Date.now();
+                const wrapper = document.getElementById('map-wrapper');
+                const rect = wrapper.getBoundingClientRect();
+                // 마우스 위치도 지도 Wrapper 기준으로 비율 계산
+                let xRatio = (e.clientX - rect.left) / rect.width;
+                let yRatio = (e.clientY - rect.top) / rect.height;
+                socket.emit('mouse_move', { x: xRatio, y: yRatio }); 
+                lastMouseTime = Date.now();
             }
         });
 
@@ -355,15 +362,10 @@
             let cursor = document.getElementById('cursor-' + data.id);
             if(!cursor) {
                 cursor = document.createElement('div'); cursor.id = 'cursor-' + data.id; cursor.className = 'remote-cursor';
-                cursor.innerHTML = `
-                    <svg width="20" height="25" viewBox="0 0 15 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L14 10L8 12L1 20V1Z" fill="${data.color}" stroke="white" stroke-width="1.5"/>
-                    </svg>
-                    <div class="cursor-name" style="background-color: ${data.color};">${data.nickname}</div>
-                `;
-                document.body.appendChild(cursor);
+                cursor.innerHTML = `<svg width="20" height="25" viewBox="0 0 15 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L14 10L8 12L1 20V1Z" fill="${data.color}" stroke="white" stroke-width="1.5"/></svg><div class="cursor-name" style="background-color: ${data.color};">${data.nickname}</div>`;
+                document.getElementById('map-wrapper').appendChild(cursor);
             }
-            cursor.style.left = data.x + 'vw'; cursor.style.top = data.y + 'vh';
+            cursor.style.left = (data.x * 100) + '%'; cursor.style.top = (data.y * 100) + '%';
         });
         socket.on('remove_cursor', (id) => { const c = document.getElementById('cursor-' + id); if(c) c.remove(); });
 
@@ -392,7 +394,6 @@
 
         // ====== 스냅샷 (라운드 저장) ======
         function saveSnapshot() {
-            // 마커, 시체뿐만 아니라 현재 캔버스에 그려진 선(allLines) 기록도 함께 저장합니다.
             const snapshotData = { markers: [], corpses: [], lines: [...allLines] };
             for(let i = 1; i <= 16; i++) {
                 const m = document.getElementById(`marker-${i}`);
@@ -418,7 +419,6 @@
             const container = document.getElementById('snapshot-markers-container');
             container.innerHTML = ''; 
             
-            // 저장된 당시의 캔버스 선들도 그대로 그려줍니다.
             const snapCanvas = document.getElementById('snapshot-canvas');
             snapCanvas.width = snapCanvas.clientWidth; snapCanvas.height = snapCanvas.clientHeight;
             const snapCtx = snapCanvas.getContext('2d');
@@ -426,9 +426,7 @@
             
             if(snap.data.lines) {
                 snap.data.lines.forEach(l => {
-                    snapCtx.beginPath();
-                    snapCtx.moveTo(l.x0 * snapCanvas.width, l.y0 * snapCanvas.height);
-                    snapCtx.lineTo(l.x1 * snapCanvas.width, l.y1 * snapCanvas.height);
+                    snapCtx.beginPath(); snapCtx.moveTo(l.x0 * snapCanvas.width, l.y0 * snapCanvas.height); snapCtx.lineTo(l.x1 * snapCanvas.width, l.y1 * snapCanvas.height);
                     snapCtx.strokeStyle = l.color; snapCtx.lineWidth = 4; snapCtx.lineCap = 'round'; snapCtx.stroke();
                 });
             }
@@ -461,8 +459,7 @@
         let locOptionsHTML = '<option value="">- 위치 선택 -</option>';
         locations.forEach(loc => locOptionsHTML += `<option value="${loc}">${loc}</option>`);
 
-        const tbody = document.getElementById('player-table');
-        const mapArea = document.getElementById('map-area');
+        const mapWrapper = document.getElementById('map-wrapper');
 
         for(let i = 1; i <= 16; i++) {
             const tr = document.createElement('tr');
@@ -474,18 +471,19 @@
                 <td><select id="loc-${i}" onchange="emitInput('loc', ${i}, this.value)">${locOptionsHTML}</select></td>
                 <td><input type="text" id="memo-${i}" placeholder="메모" oninput="emitInput('memo', ${i}, this.value)"></td>
             `;
-            tbody.appendChild(tr);
+            document.getElementById('player-table').appendChild(tr);
 
             const marker = document.createElement('div');
             marker.className = 'marker'; marker.id = `marker-${i}`; marker.innerText = `${i}`;
             setMarkerInitialPosition(marker, i);
-            mapArea.appendChild(marker);
+            mapWrapper.appendChild(marker); // 맵 래퍼에 마커를 붙여서 비율 고정
             makeDraggable(marker);
         }
         
+        // 마커 초기 위치를 %로 지정
         function setMarkerInitialPosition(marker, i) {
             const col = (i - 1) % 8; const rowIdx = Math.floor((i - 1) / 8);
-            marker.style.left = `${10 + (col * 50)}px`; marker.style.top = `${10 + (rowIdx * 35)}px`; marker.style.transform = 'none';
+            marker.style.left = `${5 + (col * 11)}%`; marker.style.top = `${5 + (rowIdx * 11)}%`; marker.style.transform = 'none';
         }
 
         function emitInput(field, id, value) {
@@ -529,7 +527,7 @@
             const corpse = document.createElement('div'); corpse.className = 'marker corpse-marker'; corpse.id = id;
             corpse.innerHTML = `💀 시체 <span class="corpse-close" onclick="emitRemoveCorpse('${id}')">X</span>`;
             corpse.style.left = left; corpse.style.top = top; corpse.style.transform = 'translate(-50%, -50%)';
-            mapArea.appendChild(corpse); makeDraggable(corpse);
+            document.getElementById('map-wrapper').appendChild(corpse); makeDraggable(corpse);
         }
         function resetMarkersOnlyUI() {
             for(let i = 1; i <= 16; i++) { setMarkerInitialPosition(document.getElementById(`marker-${i}`), i); document.getElementById(`loc-${i}`).value = ""; }
@@ -546,6 +544,8 @@
             }
             document.querySelectorAll('.corpse-marker').forEach(el => el.remove());
         }
+        
+        // ====== 마커 드래그 (비율 계산 기반) ======
         function makeDraggable(elmnt) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
             elmnt.onmousedown = dragMouseDown;
@@ -555,11 +555,23 @@
             }
             function elementDrag(e) {
                 e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
-                elmnt.style.top = (elmnt.offsetTop - pos2) + "px"; elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
-                if(currentRoom) socket.emit('move_marker', { room: currentRoom, markerId: elmnt.id, top: elmnt.style.top, left: elmnt.style.left });
+                
+                const wrapper = document.getElementById('map-wrapper');
+                const rect = wrapper.getBoundingClientRect();
+                
+                let newTop = elmnt.offsetTop - pos2;
+                let newLeft = elmnt.offsetLeft - pos1;
+                
+                // 위치를 화면크기에 구애받지 않도록 퍼센트(%)로 변환
+                let topPct = (newTop / rect.height) * 100;
+                let leftPct = (newLeft / rect.width) * 100;
+
+                elmnt.style.top = topPct + "%"; elmnt.style.left = leftPct + "%";
+                if(currentRoom) socket.emit('move_marker', { room: currentRoom, markerId: elmnt.id, top: topPct + "%", left: leftPct + "%" });
             }
             function closeDragElement() { document.onmouseup = null; document.onmousemove = null; }
         }
+        
         function copyLocationBriefing() {
             const locationMap = {}; let hasData = false;
             for(let i = 1; i <= 16; i++) {
@@ -575,7 +587,15 @@
         }
         function loadMapImage(event) {
             const file = event.target.files[0];
-            if (file) { const reader = new FileReader(); reader.onload = function(e) { document.getElementById('map-image').src = e.target.result; }; reader.readAsDataURL(file); }
+            if (file) { 
+                const reader = new FileReader(); 
+                reader.onload = function(e) { 
+                    const img = document.getElementById('map-image'); 
+                    img.src = e.target.result; 
+                    img.onload = applyMapAspectRatio; // 새 이미지 로딩 후 비율 재계산
+                }; 
+                reader.readAsDataURL(file); 
+            }
         }
     </script>
 </body>
