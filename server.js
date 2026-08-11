@@ -8,7 +8,6 @@ app.use(express.static('public'));
 const rooms = {};
 
 io.on('connection', (socket) => {
-    // 사이트에 접속하면 기본적으로 'lobby' 방에 입장시킵니다.
     socket.join('lobby');
 
     const sendRoomList = () => {
@@ -19,14 +18,14 @@ io.on('connection', (socket) => {
     };
     sendRoomList();
 
-    // 로비 전용 채팅
     socket.on('send_lobby_chat', (data) => {
         io.to('lobby').emit('receive_lobby_chat', data);
     });
 
     socket.on('create_room', (data) => {
         if (rooms[data.room]) return socket.emit('room_error', '이미 존재하는 방 이름입니다.');
-        rooms[data.room] = { password: data.password, users: [], snapshots: [] };
+        // 선(lines)을 저장할 배열을 방 데이터에 추가
+        rooms[data.room] = { password: data.password, users: [], snapshots: [], lines: [] };
         sendRoomList();
         socket.emit('room_created', data.room);
     });
@@ -36,7 +35,6 @@ io.on('connection', (socket) => {
         if (!room) return socket.emit('room_error', '존재하지 않는 방입니다.');
         if (room.password !== data.password) return socket.emit('room_error', '비밀번호가 틀렸습니다.');
 
-        // 게임 방에 들어가면 로비 채팅방에서는 나갑니다.
         socket.leave('lobby');
         socket.join(data.room);
         
@@ -48,7 +46,10 @@ io.on('connection', (socket) => {
         
         io.to(data.room).emit('update_user_list', room.users);
         io.to(data.room).emit('receive_chat', { sender: '📢 시스템', msg: `${data.nickname}님이 입장하셨습니다.`, color: '#a6adc8' });
+        
+        // 새로 입장한 사람에게 기존의 스냅샷과 캔버스 그림 데이터를 넘겨줌
         socket.emit('update_snapshots', room.snapshots);
+        socket.emit('init_canvas', room.lines);
         
         socket.emit('join_success', data.room);
         sendRoomList();
@@ -65,6 +66,22 @@ io.on('connection', (socket) => {
             socket.to(socket.room).emit('update_mouse', {
                 id: socket.id, x: data.x, y: data.y, nickname: socket.nickname, color: socket.color
             });
+        }
+    });
+
+    // 🖌️ 실시간 선 그리기 동기화
+    socket.on('draw_line', (data) => {
+        if (socket.room && rooms[socket.room]) {
+            rooms[socket.room].lines.push(data); // 방 기록에 선 추가
+            socket.to(socket.room).emit('receive_draw_line', data);
+        }
+    });
+
+    // 🗑️ 그려진 선 전체 지우기 동기화
+    socket.on('clear_canvas', () => {
+        if (socket.room && rooms[socket.room]) {
+            rooms[socket.room].lines = []; // 방의 선 기록 지우기
+            socket.to(socket.room).emit('receive_clear_canvas');
         }
     });
 
