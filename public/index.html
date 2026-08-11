@@ -8,7 +8,6 @@
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1e1e2e; color: #cdd6f4; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; overflow: hidden; }
         
-        /* 서버 로딩 오버레이 */
         #server-loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(30, 30, 46, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; color: #f9e2af; text-align: center; }
         .spinner { border: 6px solid #45475a; border-top: 6px solid #89b4fa; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -91,7 +90,6 @@
 </head>
 <body>
 
-    <!-- ✨ 서버 연결 상태 대기창 -->
     <div id="server-loading">
         <div class="spinner"></div>
         <h2>⏳ 서버에 연결 중입니다...</h2>
@@ -205,13 +203,14 @@
     </div>
 
     <script>
-        const socket = io();
+        // ✨ 핵심 수정: 렉과 지연을 없애기 위해 '무조건 초고속 WebSocket 연결'로 고정합니다. ✨
+        const socket = io({ transports: ['websocket'] });
+        
         let currentRoom = "";
         let myName = "";
         const myColor = 'hsl(' + Math.floor(Math.random() * 360) + ', 80%, 70%)';
         let currentSnapshots = [];
 
-        // ✨ 서버 연결 상태 이벤트
         socket.on('connect', () => {
             document.getElementById('server-loading').style.display = 'none';
         });
@@ -330,7 +329,6 @@
             applyMapAspectRatio();
         });
 
-        // ====== 💬 로비 채팅 ======
         function appendLobbyChat(data) {
             const box = document.getElementById('lobby-chat-box'); 
             const el = document.createElement('div'); el.className = 'chat-msg';
@@ -443,7 +441,6 @@
             });
         });
 
-        // ====== 💬 게임방 채팅 ======
         function appendGameChat(data) {
             const box = document.getElementById('game-chat-box'); const el = document.createElement('div');
             if(data.sender.includes('시스템')) { 
@@ -629,9 +626,7 @@
             function elementDrag(e) {
                 e = e || window.event; e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY;
                 
-                const wrapper = document.getElementById('map-wrapper');
-                const rect = wrapper.getBoundingClientRect();
-                
+                const rect = document.getElementById('map-wrapper').getBoundingClientRect();
                 let newTop = elmnt.offsetTop - pos2;
                 let newLeft = elmnt.offsetLeft - pos1;
                 
