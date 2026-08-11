@@ -8,7 +8,6 @@
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1e1e2e; color: #cdd6f4; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; overflow: hidden; }
         
-        /* 1. 로비 화면 디자인 (레이아웃 개편) */
         #lobby-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #1e1e2e; display: flex; align-items: center; justify-content: center; z-index: 9999; }
         .lobby-box { background-color: #313244; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 900px; display: flex; gap: 30px; height: 500px; }
         .lobby-section { display: flex; flex-direction: column; }
@@ -21,17 +20,17 @@
         .room-item { background-color: #45475a; padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; font-weight: bold; transition: 0.2s; }
         .room-item:hover { background-color: #585b70; color: #a6e3a1; }
 
-        /* 채팅 공통 스타일 */
         .chat-box-area { flex: 1; overflow-y: auto; background-color: #1e1e2e; padding: 10px; border-radius: 6px; font-size: 13px; display: flex; flex-direction: column; gap: 5px; border: 2px solid #45475a; }
         .chat-msg { background: #45475a; padding: 6px 10px; border-radius: 12px; width: fit-content; max-width: 90%; word-break: break-all; }
         .chat-system { color: #f9e2af; font-weight: bold; font-size: 12px; align-self: center; background: none; }
 
-        /* 2. 메인 앱 화면 */
         #app-container { display: none; flex-direction: column; height: 100%; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        h1 { color: #f9e2af; margin: 0; font-size: 24px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        h1 { color: #f9e2af; margin: 0; font-size: 22px; }
         .room-info { background-color: #45475a; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
-        .btn-group button { padding: 8px 12px; margin-left: 5px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+        .btn-group button { padding: 6px 10px; margin-left: 4px; font-size: 13px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+        
+        .btn-pen { background-color: #f9e2af; color: #11111b; } .btn-clear-pen { background-color: #bac2de; color: #11111b; }
         .btn-reset-all { background-color: #f38ba8; color: #11111b; } .btn-reset-marker { background-color: #fab387; color: #11111b; }
         .btn-corpse { background-color: #a6e3a1; color: #11111b; } .btn-map { background-color: #89b4fa; color: #11111b; } .btn-copy { background-color: #f5c2e7; color: #11111b; }
 
@@ -48,6 +47,10 @@
 
         .map-container { flex: 1.4; position: relative; background-color: #11111b; border-radius: 10px; overflow: hidden; border: 2px solid #45475a; display: flex; align-items: center; justify-content: center; }
         .map-container img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+        
+        /* ✨ 펜 툴 그리기 캔버스 CSS 추가 */
+        #drawing-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
+        #drawing-canvas.pen-active { pointer-events: auto; cursor: crosshair; touch-action: none; }
         
         .side-panel { flex: 0.5; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
         .panel-box { background-color: #313244; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; overflow: hidden; }
@@ -67,7 +70,8 @@
         .dead-marker { background-color: #45475a !important; color: #a6adc8 !important; text-decoration: line-through; border-color: #f38ba8 !important; }
         .corpse-marker { background-color: #f38ba8 !important; color: #11111b !important; font-size: 14px; border-radius: 5px; border: 2px solid #4c1d1d; }
         
-        #snapshot-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; z-index: 500; }
+        #snapshot-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 500; }
+        #snapshot-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 550; pointer-events: none; }
         .return-btn { position: absolute; top: 10px; right: 10px; background-color: #f38ba8; color: white; padding: 10px 20px; font-weight: bold; border-radius: 8px; cursor: pointer; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
 
         .remote-cursor { position: absolute; pointer-events: none; z-index: 10000; opacity: 0.75; transition: left 0.05s linear, top 0.05s linear; display: flex; flex-direction: column; align-items: flex-start; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }
@@ -76,26 +80,20 @@
 </head>
 <body>
 
-    <!-- 1. 로비 화면 -->
     <div id="lobby-container">
         <div class="lobby-box">
-            <!-- 1-1. 닉네임 설정 및 방 관리 -->
             <div class="lobby-section" style="flex: 1.2; border-right: 2px solid #45475a; padding-right: 20px;">
                 <h2>👤 1. 닉네임 설정</h2>
                 <input type="text" id="global-nickname" class="lobby-input" placeholder="사용할 닉네임 (입력 필수!)">
-                
                 <h2 style="margin-top: 15px;">✨ 2. 새 방 만들기</h2>
                 <div style="display:flex; gap:5px;">
                     <input type="text" id="create-room-name" class="lobby-input" style="flex:1;" placeholder="방 이름">
                     <input type="password" id="create-room-pw" class="lobby-input" style="flex:1;" placeholder="비밀번호">
                 </div>
                 <button class="lobby-btn" onclick="createRoom()">방 생성하기</button>
-
                 <h2 style="margin-top: 15px;">🚪 3. 방 목록에서 입장</h2>
                 <div id="room-list-ui"></div>
             </div>
-
-            <!-- 1-2. 로비 전용 채팅 -->
             <div class="lobby-section" style="flex: 1; padding-left: 10px;">
                 <h2>💬 로비 대기실 채팅</h2>
                 <div id="lobby-chat-box" class="chat-box-area"></div>
@@ -107,7 +105,6 @@
         </div>
     </div>
 
-    <!-- 2. 메인 앱 화면 -->
     <div id="app-container">
         <div class="header">
             <div style="display:flex; align-items:center; gap:15px;">
@@ -115,9 +112,10 @@
                 <div id="current-room-display" class="room-info">접속 중...</div>
             </div>
             <div class="btn-group">
-                <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
-                <button class="btn-map" onclick="document.getElementById('map-upload').click()">🗺️ 지도 변경</button>
-                <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체 추가</button>
+                <!-- ✨ 상단 버튼 메뉴에 펜 툴과 선 지우기 추가 -->
+                <button class="btn-pen" id="btn-pen-toggle" onclick="togglePen()">🖍️ 펜 켜기</button>
+                <button class="btn-clear-pen" onclick="emitClearCanvas()">🗑️ 선 지우기</button>
+                <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체</button>
                 <button class="btn-copy" id="btn-copy-brief" onclick="copyLocationBriefing()">📋 결과 복사</button>
                 <button class="btn-reset-marker" onclick="emitResetMarkers()">📍 마커 초기화</button>
                 <button class="btn-reset-all" onclick="emitResetAll()">🔄 전체 초기화</button>
@@ -134,8 +132,12 @@
 
             <div class="map-container" id="map-area">
                 <img src="image_0a04c3.jpg" id="map-image" alt="구스구스덕 맵">
+                <!-- ✨ 그림을 그리는 투명 캔버스 도화지 -->
+                <canvas id="drawing-canvas"></canvas>
+                
                 <div id="snapshot-layer">
                     <div class="return-btn" onclick="exitSnapshot()">❌ 과거 기록 닫기 (현재로 복귀)</div>
+                    <canvas id="snapshot-canvas"></canvas>
                     <div id="snapshot-markers-container"></div>
                 </div>
             </div>
@@ -179,8 +181,7 @@
                 listUI.innerHTML = '<p style="text-align:center; color:#a6adc8; margin-top:30px;">생성된 방이 없습니다.</p>';
             } else {
                 list.forEach(r => {
-                    const el = document.createElement('div');
-                    el.className = 'room-item';
+                    const el = document.createElement('div'); el.className = 'room-item';
                     el.innerHTML = `<span>📡 ${r.roomName}</span> <span>👤 ${r.userCount}명</span>`;
                     el.onclick = () => joinExistingRoom(r.roomName);
                     listUI.appendChild(el);
@@ -224,45 +225,136 @@
             document.getElementById('lobby-container').style.display = 'none';
             document.getElementById('app-container').style.display = 'flex';
             document.getElementById('current-room-display').innerHTML = `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${myColor}; margin-right:5px; border:1px solid #fff;"></span> ${myName} (📡 ${roomName})`;
+            
+            // 캔버스 크기 맞춤
+            setTimeout(resizeCanvas, 300);
         });
 
-        // ====== 로비 채팅 기능 ======
         function sendLobbyChat() {
-            const nickname = getNickname();
-            if(!nickname) return;
+            const nickname = getNickname(); if(!nickname) return;
             const input = document.getElementById('lobby-chat-input');
-            const msg = input.value.trim();
-            if(!msg) return;
+            const msg = input.value.trim(); if(!msg) return;
             socket.emit('send_lobby_chat', { sender: nickname, msg: msg, color: myColor });
             input.value = '';
         }
-
         socket.on('receive_lobby_chat', (data) => {
-            const box = document.getElementById('lobby-chat-box');
-            const el = document.createElement('div');
-            el.className = 'chat-msg';
+            const box = document.getElementById('lobby-chat-box'); const el = document.createElement('div'); el.className = 'chat-msg';
             el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`;
-            box.appendChild(el);
-            box.scrollTop = box.scrollHeight;
+            box.appendChild(el); box.scrollTop = box.scrollHeight;
         });
+
+        // ====== 🖍️ 펜 툴 그리기 로직 ======
+        let isPenMode = false;
+        const drawingCanvas = document.getElementById('drawing-canvas');
+        const ctx = drawingCanvas.getContext('2d');
+        let allLines = [];
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+
+        function resizeCanvas() {
+            const rect = drawingCanvas.getBoundingClientRect();
+            if(drawingCanvas.width !== rect.width || drawingCanvas.height !== rect.height) {
+                drawingCanvas.width = rect.width; drawingCanvas.height = rect.height;
+                redrawCanvas();
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function togglePen() {
+            isPenMode = !isPenMode;
+            const btn = document.getElementById('btn-pen-toggle');
+            if(isPenMode) {
+                drawingCanvas.classList.add('pen-active');
+                resizeCanvas();
+                btn.innerText = '🖍️ 펜 끄기';
+                btn.style.backgroundColor = '#a6e3a1'; // 활성화 시 초록색
+            } else {
+                drawingCanvas.classList.remove('pen-active');
+                btn.innerText = '🖍️ 펜 켜기';
+                btn.style.backgroundColor = '#f9e2af';
+                isDrawing = false;
+            }
+        }
+
+        function getCanvasPos(e) {
+            const rect = drawingCanvas.getBoundingClientRect();
+            let clientX = e.clientX, clientY = e.clientY;
+            if(e.touches && e.touches.length > 0) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+            return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+        }
+
+        function startDraw(e) {
+            if(!isPenMode) return;
+            isDrawing = true;
+            const pos = getCanvasPos(e);
+            lastX = pos.x; lastY = pos.y;
+        }
+
+        function drawPath(e) {
+            if(!isDrawing) return;
+            e.preventDefault(); // 스크롤 방지
+            const pos = getCanvasPos(e);
+            drawLineLocally(lastX, lastY, pos.x, pos.y, myColor, true);
+            socket.emit('draw_line', { x0: lastX, y0: lastY, x1: pos.x, y1: pos.y, color: myColor });
+            lastX = pos.x; lastY = pos.y;
+        }
+
+        function endDraw() { isDrawing = false; }
+
+        drawingCanvas.addEventListener('mousedown', startDraw);
+        drawingCanvas.addEventListener('mousemove', drawPath);
+        window.addEventListener('mouseup', endDraw);
+        drawingCanvas.addEventListener('touchstart', startDraw, {passive: false});
+        drawingCanvas.addEventListener('touchmove', drawPath, {passive: false});
+        window.addEventListener('touchend', endDraw);
+
+        function drawLineLocally(x0, y0, x1, y1, color, save=true) {
+            if(save) allLines.push({x0, y0, x1, y1, color});
+            ctx.beginPath();
+            ctx.moveTo(x0 * drawingCanvas.width, y0 * drawingCanvas.height);
+            ctx.lineTo(x1 * drawingCanvas.width, y1 * drawingCanvas.height);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            allLines.forEach(l => drawLineLocally(l.x0, l.y0, l.x1, l.y1, l.color, false));
+        }
+
+        function clearCanvasLocally() {
+            allLines = []; ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        }
+
+        function emitClearCanvas() {
+            if(confirm("맵 위에 그려진 모든 선을 지우시겠습니까?")) {
+                clearCanvasLocally(); socket.emit('clear_canvas');
+            }
+        }
+
+        socket.on('init_canvas', (lines) => {
+            allLines = lines || [];
+            setTimeout(resizeCanvas, 300);
+        });
+
+        socket.on('receive_draw_line', (data) => drawLineLocally(data.x0, data.y0, data.x1, data.y1, data.color, true));
+        socket.on('receive_clear_canvas', () => clearCanvasLocally());
 
         // ====== 실시간 마우스 커서 전송 ======
         let lastMouseTime = 0;
         document.addEventListener('mousemove', (e) => {
             if(currentRoom && Date.now() - lastMouseTime > 50) {
-                const x = (e.pageX / window.innerWidth) * 100;
-                const y = (e.pageY / window.innerHeight) * 100;
-                socket.emit('mouse_move', { x, y });
-                lastMouseTime = Date.now();
+                const x = (e.pageX / window.innerWidth) * 100; const y = (e.pageY / window.innerHeight) * 100;
+                socket.emit('mouse_move', { x, y }); lastMouseTime = Date.now();
             }
         });
 
         socket.on('update_mouse', (data) => {
             let cursor = document.getElementById('cursor-' + data.id);
             if(!cursor) {
-                cursor = document.createElement('div');
-                cursor.id = 'cursor-' + data.id;
-                cursor.className = 'remote-cursor';
+                cursor = document.createElement('div'); cursor.id = 'cursor-' + data.id; cursor.className = 'remote-cursor';
                 cursor.innerHTML = `
                     <svg width="20" height="25" viewBox="0 0 15 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M1 1L14 10L8 12L1 20V1Z" fill="${data.color}" stroke="white" stroke-width="1.5"/>
@@ -273,14 +365,12 @@
             }
             cursor.style.left = data.x + 'vw'; cursor.style.top = data.y + 'vh';
         });
-
         socket.on('remove_cursor', (id) => { const c = document.getElementById('cursor-' + id); if(c) c.remove(); });
 
         // ====== 사이드 패널 (명단, 방 채팅) ======
         socket.on('update_user_list', (users) => {
             document.getElementById('user-count').innerText = users.length;
-            const ul = document.getElementById('user-list-ui');
-            ul.innerHTML = '';
+            const ul = document.getElementById('user-list-ui'); ul.innerHTML = '';
             users.forEach(u => {
                 const li = document.createElement('li');
                 li.innerHTML = `<span class="user-color-dot" style="background-color:${u.color};"></span> ${u.nickname}`;
@@ -289,28 +379,21 @@
         });
 
         function sendGameChat() {
-            const input = document.getElementById('game-chat-input');
-            const msg = input.value.trim();
-            if(!msg) return;
-            socket.emit('send_chat', { msg });
-            input.value = '';
+            const input = document.getElementById('game-chat-input'); const msg = input.value.trim(); if(!msg) return;
+            socket.emit('send_chat', { msg }); input.value = '';
         }
 
         socket.on('receive_chat', (data) => {
-            const box = document.getElementById('game-chat-box');
-            const el = document.createElement('div');
-            if(data.sender.includes('시스템')) {
-                el.className = 'chat-msg chat-system'; el.style.color = data.color; el.innerText = data.msg;
-            } else {
-                el.className = 'chat-msg'; el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`;
-            }
-            box.appendChild(el);
-            box.scrollTop = box.scrollHeight;
+            const box = document.getElementById('game-chat-box'); const el = document.createElement('div');
+            if(data.sender.includes('시스템')) { el.className = 'chat-msg chat-system'; el.style.color = data.color; el.innerText = data.msg; } 
+            else { el.className = 'chat-msg'; el.innerHTML = `<b style="color:${data.color};">${data.sender}</b>: ${data.msg}`; }
+            box.appendChild(el); box.scrollTop = box.scrollHeight;
         });
 
         // ====== 스냅샷 (라운드 저장) ======
         function saveSnapshot() {
-            const snapshotData = { markers: [], corpses: [] };
+            // 마커, 시체뿐만 아니라 현재 캔버스에 그려진 선(allLines) 기록도 함께 저장합니다.
+            const snapshotData = { markers: [], corpses: [], lines: [...allLines] };
             for(let i = 1; i <= 16; i++) {
                 const m = document.getElementById(`marker-${i}`);
                 snapshotData.markers.push({ id: i, left: m.style.left, top: m.style.top, text: m.innerText, className: m.className });
@@ -321,13 +404,11 @@
 
         socket.on('update_snapshots', (snapshots) => {
             currentSnapshots = snapshots;
-            const ul = document.getElementById('snapshot-list-ui');
-            ul.innerHTML = '';
+            const ul = document.getElementById('snapshot-list-ui'); ul.innerHTML = '';
             snapshots.forEach((snap, idx) => {
                 const li = document.createElement('li'); li.className = 'snap-item';
                 li.innerHTML = `<span>${snap.name}</span> <span>🔍보기</span>`;
-                li.onclick = () => viewSnapshot(idx);
-                ul.appendChild(li);
+                li.onclick = () => viewSnapshot(idx); ul.appendChild(li);
             });
         });
 
@@ -336,6 +417,22 @@
             const layer = document.getElementById('snapshot-layer');
             const container = document.getElementById('snapshot-markers-container');
             container.innerHTML = ''; 
+            
+            // 저장된 당시의 캔버스 선들도 그대로 그려줍니다.
+            const snapCanvas = document.getElementById('snapshot-canvas');
+            snapCanvas.width = snapCanvas.clientWidth; snapCanvas.height = snapCanvas.clientHeight;
+            const snapCtx = snapCanvas.getContext('2d');
+            snapCtx.clearRect(0, 0, snapCanvas.width, snapCanvas.height);
+            
+            if(snap.data.lines) {
+                snap.data.lines.forEach(l => {
+                    snapCtx.beginPath();
+                    snapCtx.moveTo(l.x0 * snapCanvas.width, l.y0 * snapCanvas.height);
+                    snapCtx.lineTo(l.x1 * snapCanvas.width, l.y1 * snapCanvas.height);
+                    snapCtx.strokeStyle = l.color; snapCtx.lineWidth = 4; snapCtx.lineCap = 'round'; snapCtx.stroke();
+                });
+            }
+
             snap.data.markers.forEach(m => {
                 const el = document.createElement('div'); el.className = m.className;
                 el.style.left = m.left; el.style.top = m.top; el.innerText = m.text; el.style.position = 'absolute'; el.style.zIndex = '600';
