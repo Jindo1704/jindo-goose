@@ -6,9 +6,8 @@ const io = require('socket.io')(http);
 app.use(express.static('public'));
 
 const rooms = {};
-let lobbyChatHistory = []; // 로비 채팅 기록 저장소
+let lobbyChatHistory = []; 
 
-// 무조건 한국 시간(KST)으로 변환해주는 함수
 const getKSTTime = () => {
     return new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
 };
@@ -16,10 +15,8 @@ const getKSTTime = () => {
 // 🧹 주기적인 채팅 기록 청소 (1분마다 실행)
 setInterval(() => {
     const now = Date.now();
-    // 로비 채팅: 1시간(60분 * 60초 * 1000밀리초) 지난 메시지 자동 삭제
     lobbyChatHistory = lobbyChatHistory.filter(chat => now - chat.timestamp < 60 * 60 * 1000);
     
-    // 방 채팅: 30분(30분 * 60초 * 1000밀리초) 지난 메시지 자동 삭제
     for (const roomName in rooms) {
         rooms[roomName].chatHistory = rooms[roomName].chatHistory.filter(chat => now - chat.timestamp < 30 * 60 * 1000);
     }
@@ -27,8 +24,6 @@ setInterval(() => {
 
 io.on('connection', (socket) => {
     socket.join('lobby');
-    
-    // 처음 접속한 사람에게 로비 채팅 기록 쏴주기
     socket.emit('load_lobby_chat_history', lobbyChatHistory);
 
     const sendRoomList = () => {
@@ -40,20 +35,13 @@ io.on('connection', (socket) => {
     sendRoomList();
 
     socket.on('send_lobby_chat', (data) => {
-        const chatData = {
-            sender: data.sender,
-            msg: data.msg,
-            color: data.color,
-            time: getKSTTime(),
-            timestamp: Date.now()
-        };
+        const chatData = { sender: data.sender, msg: data.msg, color: data.color, time: getKSTTime(), timestamp: Date.now() };
         lobbyChatHistory.push(chatData);
         io.to('lobby').emit('receive_lobby_chat', chatData);
     });
 
     socket.on('create_room', (data) => {
         if (rooms[data.room]) return socket.emit('room_error', '이미 존재하는 방 이름입니다.');
-        // 방 생성 시 chatHistory 배열 추가
         rooms[data.room] = { password: data.password, users: [], snapshots: [], lines: [], chatHistory: [] };
         sendRoomList();
         socket.emit('room_created', data.room);
@@ -74,11 +62,8 @@ io.on('connection', (socket) => {
         room.users.push({ id: socket.id, nickname: data.nickname, color: data.color });
         
         io.to(data.room).emit('update_user_list', room.users);
-        
-        // 방에 처음 들어온 사람에게 이전 채팅 기록 쏴주기
         socket.emit('load_room_chat_history', room.chatHistory);
 
-        // 시스템 메시지에도 시간 추가 및 저장
         const sysMsg = { sender: '📢 시스템', msg: `${data.nickname}님이 입장하셨습니다.`, color: '#a6adc8', time: getKSTTime(), timestamp: Date.now() };
         room.chatHistory.push(sysMsg);
         io.to(data.room).emit('receive_chat', sysMsg);
@@ -92,13 +77,7 @@ io.on('connection', (socket) => {
 
     socket.on('send_chat', (data) => {
         if (socket.room && rooms[socket.room]) {
-            const chatData = {
-                sender: socket.nickname,
-                msg: data.msg,
-                color: socket.color,
-                time: getKSTTime(),
-                timestamp: Date.now()
-            };
+            const chatData = { sender: socket.nickname, msg: data.msg, color: socket.color, time: getKSTTime(), timestamp: Date.now() };
             rooms[socket.room].chatHistory.push(chatData);
             io.to(socket.room).emit('receive_chat', chatData);
         }
@@ -106,9 +85,7 @@ io.on('connection', (socket) => {
 
     socket.on('mouse_move', (data) => {
         if (socket.room) {
-            socket.to(socket.room).emit('update_mouse', {
-                id: socket.id, x: data.x, y: data.y, nickname: socket.nickname, color: socket.color
-            });
+            socket.to(socket.room).emit('update_mouse', { id: socket.id, x: data.x, y: data.y, nickname: socket.nickname, color: socket.color });
         }
     });
 
@@ -151,16 +128,16 @@ io.on('connection', (socket) => {
         if (socket.room && rooms[socket.room]) {
             const room = rooms[socket.room];
             room.users = room.users.filter(u => u.id !== socket.id);
-            
             io.to(socket.room).emit('update_user_list', room.users);
             
             const sysMsg = { sender: '📢 시스템', msg: `${socket.nickname}님이 퇴장하셨습니다.`, color: '#f38ba8', time: getKSTTime(), timestamp: Date.now() };
             room.chatHistory.push(sysMsg);
             io.to(socket.room).emit('receive_chat', sysMsg);
-            
             io.to(socket.room).emit('remove_cursor', socket.id);
             
-            if (room.users.length === 0) delete rooms[socket.room];
+            // ✨ [핵심 수정] 이제 혼자 있다가 나가도(새로고침 해도) 방이 폭파되지 않습니다!
+            // if (room.users.length === 0) delete rooms[socket.room]; 
+            
             sendRoomList();
         }
     });
