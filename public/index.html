@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>구스구스덕 실시간 커뮤니티 트래커</title>
-    <!-- 초고속 연결 강제 고정 -->
+    <!-- 실시간 통신 및 텍스트 스캔(OCR) 인공지능 스크립트 추가 -->
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #1e1e2e; color: #cdd6f4; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; overflow: hidden; }
         
@@ -38,8 +39,8 @@
         .room-info { background-color: #45475a; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
         .btn-group button, .btn-group select { padding: 6px 10px; margin-left: 4px; font-size: 13px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
         
-        .btn-pen { background-color: #f9e2af; color: #11111b; } .btn-clear-pen { background-color: #bac2de; color: #11111b; }
-        .btn-reset-all { background-color: #f38ba8; color: #11111b; } .btn-reset-marker { background-color: #fab387; color: #11111b; }
+        .btn-scan { background-color: #fab387; color: #11111b; } .btn-pen { background-color: #f9e2af; color: #11111b; } .btn-clear-pen { background-color: #bac2de; color: #11111b; }
+        .btn-reset-all { background-color: #f38ba8; color: #11111b; } .btn-reset-marker { background-color: #eba073; color: #11111b; }
         .btn-corpse { background-color: #a6e3a1; color: #11111b; } .btn-map { background-color: #89b4fa; color: #11111b; outline: none; } .btn-copy { background-color: #f5c2e7; color: #11111b; }
 
         .main-container { display: flex; gap: 15px; flex: 1; overflow: hidden; }
@@ -95,8 +96,8 @@
 
     <div id="server-loading">
         <div class="spinner"></div>
-        <h2>⏳ 서버 연결 상태 확인 중...</h2>
-        <p style="color: #a6adc8; font-size: 14px; margin-top: 10px;">채팅창에 나오는 연결 상태 메시지를 확인해주세요!</p>
+        <h2 id="loading-title">⏳ 서버 연결 상태 확인 중...</h2>
+        <p id="loading-desc" style="color: #a6adc8; font-size: 14px; margin-top: 10px;">채팅창에 나오는 연결 상태 메시지를 확인해주세요!</p>
     </div>
 
     <div id="lobby-container">
@@ -128,18 +129,24 @@
             </div>
             <div class="btn-group">
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
+                <!-- ✨ 닉네임 스캔용 숨겨진 업로드 버튼 -->
+                <input type="file" id="ocr-upload" accept="image/*" style="display:none;" onchange="processOCR(event)">
+                
                 <select id="map-selector" class="btn-map" style="color:#11111b; padding-right:20px;" onchange="changeMap(this.value)">
                     <option value="image_0a04c3.jpg">🗺️ 맵: 지하실</option>
                     <option value="custom">📁 내 PC에서 열기</option>
                 </select>
                 
+                <!-- ✨ 닉네임 자동 스캔 버튼 추가 -->
+                <button class="btn-scan" onclick="document.getElementById('ocr-upload').click()">📸 명단 자동 스캔</button>
+
                 <button class="btn-pen" id="btn-pen-toggle" onclick="togglePen()">🖍️ 펜 켜기</button>
                 <button class="btn-clear-pen" onclick="emitClearCanvas()">🗑️ 선 지우기</button>
                 <button class="btn-map" style="background-color:#cba6f7;" onclick="toggleFullscreenMap()">🔍 맵 꽉차게</button>
                 
                 <button class="btn-corpse" onclick="emitAddCorpse()">💀 시체</button>
                 <button class="btn-copy" id="btn-copy-brief" onclick="copyLocationBriefing()">📋 결과 복사</button>
-                <button class="btn-reset-marker" onclick="emitResetMarkers()">📍 마커 초기화</button>
+                <button class="btn-reset-marker" onclick="emitResetMarkers()">📍 위치 초기화</button>
                 <button class="btn-reset-all" onclick="emitResetAll()">🔄 전체 초기화</button>
             </div>
         </div>
@@ -232,18 +239,69 @@
             addLobbySystemMsg("🟢 연결 성공! 이제 방 입장 및 채팅이 가능합니다.", "#a6e3a1");
         });
 
+        const disconnectHtml = `
+            <div style="font-size: 50px; margin-bottom: 20px;">🔌</div>
+            <h2 id="loading-title">서버 연결이 끊어졌습니다.</h2>
+            <p id="loading-desc" style="color: #a6adc8; font-size: 14px; margin-top: 10px;">자동으로 재접속을 시도합니다...</p>
+        `;
+
         socket.on('disconnect', () => {
             isConnected = false;
             document.getElementById('btn-send-lobby').disabled = true;
             document.getElementById('server-loading').style.display = 'flex';
-            document.getElementById('server-loading').innerHTML = `
-                <div style="font-size: 50px; margin-bottom: 20px;">🔌</div>
-                <h2>서버 연결이 끊어졌습니다.</h2>
-                <p style="color: #a6adc8; font-size: 14px; margin-top: 10px;">자동으로 재접속을 시도합니다...</p>
-            `;
+            document.getElementById('server-loading').innerHTML = disconnectHtml;
             addLobbySystemMsg("🔴 연결이 끊겼습니다! 3초 뒤 자동 새로고침 됩니다...", "#f38ba8");
             setTimeout(() => { if(!isConnected) window.location.reload(); }, 3000);
         });
+
+        // ✨ 닉네임 자동 스캔 (OCR) 기능 ✨
+        async function processOCR(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 로딩 화면 표시
+            const loading = document.getElementById('server-loading');
+            loading.style.display = 'flex';
+            loading.innerHTML = `
+                <div class="spinner"></div>
+                <h2>🔍 이미지 분석 중...</h2>
+                <p style="color: #a6adc8; font-size: 14px; margin-top: 10px;">
+                    글자를 읽어내는 중입니다.<br>최대 10~20초 정도 소요될 수 있으니 잠시만 기다려주세요!
+                </p>
+            `;
+
+            try {
+                // Tesseract를 이용해 한국어+영어 인식
+                const result = await Tesseract.recognize(file, 'kor+eng');
+                const text = result.data.text;
+                
+                // 텍스트 다듬기 (빈 줄 제거 및 공백 제거)
+                let lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.length <= 15);
+                
+                // 1번부터 16번 입력칸에 차례대로 넣기
+                let idx = 1;
+                for (let i = 0; i < lines.length && idx <= 16; i++) {
+                    // 쓰레기 문자 필터링 (최소 2글자 이상인 경우만 이름으로 취급)
+                    if(lines[i].length > 1) {
+                        const nameInput = document.getElementById(`name-${idx}`);
+                        if(nameInput) {
+                            nameInput.value = lines[i];
+                            emitInput('name', idx, lines[i]); // 방에 있는 다른 사람들에게 즉시 전송
+                            idx++;
+                        }
+                    }
+                }
+                alert("✅ 닉네임 자동 입력 완료!\n\n오타나 잘못 인식된 글자가 있다면 표를 클릭해서 직접 수정해 주세요.");
+            } catch (error) {
+                console.error(error);
+                alert("❌ 이미지 분석 중 오류가 발생했습니다. 이미지가 너무 흐리거나 복잡할 수 있습니다.");
+            } finally {
+                // 로딩 화면 숨기고 원래 상태로 복구
+                loading.style.display = 'none';
+                loading.innerHTML = disconnectHtml;
+                event.target.value = ''; // 동일한 사진을 또 올릴 수 있도록 초기화
+            }
+        }
 
         const mapImg = document.getElementById('map-image');
         const mapWrapper = document.getElementById('map-wrapper');
@@ -301,7 +359,6 @@
             const listUI = document.getElementById('room-list-ui');
             listUI.innerHTML = '';
             
-            // 1번부터 10번 방이 번호순으로 정렬되어 보이게 함
             list.sort((a, b) => parseInt(a.roomName) - parseInt(b.roomName)).forEach(r => {
                 const el = document.createElement('div'); el.className = 'room-item';
                 el.innerHTML = `<span>📡 ${r.roomName}</span> <span>👤 ${r.userCount}명</span>`;
@@ -316,7 +373,6 @@
             return name;
         }
 
-        // 비밀번호 없이 닉네임만 확인하고 바로 입장!
         function joinExistingRoom(roomName) {
             if(!isConnected) return alert("⏳ 서버 연결 중입니다. 잠시만 기다려주세요!");
             const nickname = getNickname();
