@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>구스구스덕 실시간 커뮤니티 트래커</title>
+    <!-- 실시간 통신 및 텍스트 스캔(OCR) 인공지능 스크립트 추가 -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
@@ -128,6 +129,7 @@
             </div>
             <div class="btn-group">
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
+                <!-- ✨ 닉네임 자동 스캔 버튼 원상복구 -->
                 <input type="file" id="ocr-upload" accept="image/*" style="display:none;" onchange="processOCR(event)">
                 
                 <select id="map-selector" class="btn-map" style="color:#11111b; padding-right:20px;" onchange="changeMap(this.value)">
@@ -251,7 +253,7 @@
             setTimeout(() => { if(!isConnected) window.location.reload(); }, 3000);
         });
 
-        // ✨ 닉네임 자동 스캔 (필터링 대폭 강화 버전) ✨
+        // ✨ 핵심: 빨간색(X)만 지우고 닉네임만 뽑아내는 특수 필터 스캐너 ✨
         async function processOCR(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -260,52 +262,93 @@
             loading.style.display = 'flex';
             loading.innerHTML = `
                 <div class="spinner"></div>
-                <h2>🔍 이미지 분석 중...</h2>
+                <h2>🔍 명단 정밀 스캔 중...</h2>
                 <p style="color: #a6adc8; font-size: 14px; margin-top: 10px;">
-                    글자를 읽어내는 중입니다.<br>최대 10~20초 정도 소요될 수 있으니 잠시만 기다려주세요!
+                    사망 표시(X)를 지우고 닉네임만 추출하고 있습니다.<br>최대 10~20초 정도 소요될 수 있습니다!
                 </p>
             `;
 
             try {
-                const result = await Tesseract.recognize(file, 'kor+eng');
+                // 1. 이미지를 캔버스로 불러오기
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                await new Promise(r => img.onload = r);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                // 2. 픽셀 전처리 마법: 구구덕 닉네임(하얀색, 노란색)만 살리고 빨간색 X와 배경은 모두 검은색으로 밀어버림!
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i]; const g = data[i+1];
+                    
+                    // 하얀색/노란색 글자는 Green(g) 수치가 높음. 사망표시(빨간색)는 Green이 낮음.
+                    if (r > 130 && g > 130) {
+                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; // 뚜렷한 흰색 글자로 변환
+                    } else {
+                        data[i] = 0; data[i+1] = 0; data[i+2] = 0; // 검은색 배경으로 처리
+                    }
+                }
+                ctx.putImageData(imageData, 0, 0);
+                
+                // 3. 전처리된 아주 깨끗한 이미지로 스캐너 실행
+                const processedImageUrl = canvas.toDataURL('image/png');
+                const result = await Tesseract.recognize(processedImageUrl, 'kor+eng');
                 const text = result.data.text;
                 let lines = text.split('\n');
                 
-                // 🚫 게임 UI에 자주 등장하는 쓰레기 단어 목록 (이 단어가 포함되면 무시함)
-                const ignoreList = ['발언권', '건너뛰기', 'ESC', 'TAB', 'BACK', '연쇄', '살조범'];
-                
                 let filteredNames = [];
+                // 🚫 게임 UI에 등장하는 필요 없는 단어들 (읽히더라도 가차없이 버림)
+                const ignoreList = ['연쇄살조범', '발언권', '건너뛰기', 'ESC', 'TAB', 'BACK'];
                 
                 for (let line of lines) {
-                    // 1. 특수문자 완벽 제거 (한글, 영문, 숫자, 띄어쓰기만 허용)
-                    let cleanLine = line.replace(/[^a-zA-Z가-힣0-9\s]/g, '').trim();
+                    // 4. 한글, 영문 대소문자, 숫자만 남기고 전부 삭제! (외계어와 띄어쓰기 완벽 제거)
+                    let cleanLine = line.replace(/[^a-zA-Z가-힣0-9]/g, '');
                     
-                    // 2. 글자수가 1글자 이하이거나 15글자를 넘으면 이름이 아니라고 판단하여 버림
-                    if (cleanLine.length < 2 || cleanLine.length > 15) continue;
+                    // 5. 비어있거나 단 1글자짜리 'J' 같은 이름 챙기기
+                    if (cleanLine.length < 1) continue;
                     
-                    // 3. 쓰레기 단어 목록에 있는 글자가 포함되어 있으면 버림
-                    let shouldIgnore = ignoreList.some(ignoreWord => cleanLine.toUpperCase().includes(ignoreWord.toUpperCase()));
-                    if (shouldIgnore) continue;
+                    // 6. 블랙리스트 단어가 포함되어 있으면 버림
+                    let isSpam = ignoreList.some(ignoreWord => cleanLine.toUpperCase().includes(ignoreWord.toUpperCase()));
+                    if (isSpam) continue;
                     
-                    // 4. 자음이나 모음만 있는 무의미한 텍스트(ㅋㅋ, ㅎㅎ 등) 버림
+                    // 7. 자음이나 모음만 있는 무의미한 텍스트(ㅋㅋ, ㅎㅎ 등) 버림
                     if (/^[ㄱ-ㅎㅏ-ㅣ]+$/.test(cleanLine)) continue;
+                    
+                    // 8. 비정상적으로 긴 텍스트 버림
+                    if (cleanLine.length > 15) continue;
 
-                    filteredNames.push(cleanLine);
+                    filteredNames.push(cleanLine); // 살아남은 진정한 닉네임만 저장!
                 }
                 
+                // 9. 순서대로 입력칸에 집어넣기 (Tesseract는 기본적으로 위에서 아래로, 좌에서 우로 읽음)
                 let idx = 1;
                 for (let i = 0; i < filteredNames.length && idx <= 16; i++) {
                     const nameInput = document.getElementById(`name-${idx}`);
                     if(nameInput) {
                         nameInput.value = filteredNames[i];
-                        emitInput('name', idx, filteredNames[i]);
+                        emitInput('name', idx, filteredNames[i]); // 실시간 동기화
                         idx++;
                     }
                 }
-                alert("✅ 닉네임 스캔 완료!\n\n거대한 X 표시 등 게임 그래픽 때문에 약간의 오타가 발생할 수 있습니다.\n잘못 인식된 이름이 있다면 표의 해당 칸을 클릭해서 직접 수정해 주세요.");
+                
+                // 10. 나머지 빈칸 깔끔하게 청소
+                for (let i = idx; i <= 16; i++) {
+                    const nameInput = document.getElementById(`name-${i}`);
+                    if(nameInput && nameInput.value !== "") {
+                        nameInput.value = "";
+                        emitInput('name', i, "");
+                    }
+                }
+
+                alert("✅ 닉네임 정밀 스캔 완료!\n\n사망 표시(X)를 뚫고 닉네임만 성공적으로 가져왔습니다.\n띄어쓰기와 외계어도 모두 제거되었습니다.");
             } catch (error) {
                 console.error(error);
-                alert("❌ 이미지 분석 중 오류가 발생했습니다. 이미지가 너무 흐리거나 복잡할 수 있습니다.");
+                alert("❌ 이미지 분석 중 오류가 발생했습니다.");
             } finally {
                 loading.style.display = 'none';
                 loading.innerHTML = disconnectHtml;
