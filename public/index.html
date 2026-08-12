@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>구스구스덕 실시간 커뮤니티 트래커</title>
-    <!-- 실시간 통신 및 텍스트 스캔(OCR) 인공지능 스크립트 추가 -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
@@ -129,7 +128,6 @@
             </div>
             <div class="btn-group">
                 <input type="file" id="map-upload" accept="image/*" style="display:none;" onchange="loadMapImage(event)">
-                <!-- ✨ 닉네임 스캔용 숨겨진 업로드 버튼 -->
                 <input type="file" id="ocr-upload" accept="image/*" style="display:none;" onchange="processOCR(event)">
                 
                 <select id="map-selector" class="btn-map" style="color:#11111b; padding-right:20px;" onchange="changeMap(this.value)">
@@ -137,7 +135,6 @@
                     <option value="custom">📁 내 PC에서 열기</option>
                 </select>
                 
-                <!-- ✨ 닉네임 자동 스캔 버튼 추가 -->
                 <button class="btn-scan" onclick="document.getElementById('ocr-upload').click()">📸 명단 자동 스캔</button>
 
                 <button class="btn-pen" id="btn-pen-toggle" onclick="togglePen()">🖍️ 펜 켜기</button>
@@ -254,12 +251,11 @@
             setTimeout(() => { if(!isConnected) window.location.reload(); }, 3000);
         });
 
-        // ✨ 닉네임 자동 스캔 (OCR) 기능 ✨
+        // ✨ 닉네임 자동 스캔 (필터링 대폭 강화 버전) ✨
         async function processOCR(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            // 로딩 화면 표시
             const loading = document.getElementById('server-loading');
             loading.style.display = 'flex';
             loading.innerHTML = `
@@ -271,35 +267,49 @@
             `;
 
             try {
-                // Tesseract를 이용해 한국어+영어 인식
                 const result = await Tesseract.recognize(file, 'kor+eng');
                 const text = result.data.text;
+                let lines = text.split('\n');
                 
-                // 텍스트 다듬기 (빈 줄 제거 및 공백 제거)
-                let lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.length <= 15);
+                // 🚫 게임 UI에 자주 등장하는 쓰레기 단어 목록 (이 단어가 포함되면 무시함)
+                const ignoreList = ['발언권', '건너뛰기', 'ESC', 'TAB', 'BACK', '연쇄', '살조범'];
                 
-                // 1번부터 16번 입력칸에 차례대로 넣기
+                let filteredNames = [];
+                
+                for (let line of lines) {
+                    // 1. 특수문자 완벽 제거 (한글, 영문, 숫자, 띄어쓰기만 허용)
+                    let cleanLine = line.replace(/[^a-zA-Z가-힣0-9\s]/g, '').trim();
+                    
+                    // 2. 글자수가 1글자 이하이거나 15글자를 넘으면 이름이 아니라고 판단하여 버림
+                    if (cleanLine.length < 2 || cleanLine.length > 15) continue;
+                    
+                    // 3. 쓰레기 단어 목록에 있는 글자가 포함되어 있으면 버림
+                    let shouldIgnore = ignoreList.some(ignoreWord => cleanLine.toUpperCase().includes(ignoreWord.toUpperCase()));
+                    if (shouldIgnore) continue;
+                    
+                    // 4. 자음이나 모음만 있는 무의미한 텍스트(ㅋㅋ, ㅎㅎ 등) 버림
+                    if (/^[ㄱ-ㅎㅏ-ㅣ]+$/.test(cleanLine)) continue;
+
+                    filteredNames.push(cleanLine);
+                }
+                
                 let idx = 1;
-                for (let i = 0; i < lines.length && idx <= 16; i++) {
-                    // 쓰레기 문자 필터링 (최소 2글자 이상인 경우만 이름으로 취급)
-                    if(lines[i].length > 1) {
-                        const nameInput = document.getElementById(`name-${idx}`);
-                        if(nameInput) {
-                            nameInput.value = lines[i];
-                            emitInput('name', idx, lines[i]); // 방에 있는 다른 사람들에게 즉시 전송
-                            idx++;
-                        }
+                for (let i = 0; i < filteredNames.length && idx <= 16; i++) {
+                    const nameInput = document.getElementById(`name-${idx}`);
+                    if(nameInput) {
+                        nameInput.value = filteredNames[i];
+                        emitInput('name', idx, filteredNames[i]);
+                        idx++;
                     }
                 }
-                alert("✅ 닉네임 자동 입력 완료!\n\n오타나 잘못 인식된 글자가 있다면 표를 클릭해서 직접 수정해 주세요.");
+                alert("✅ 닉네임 스캔 완료!\n\n거대한 X 표시 등 게임 그래픽 때문에 약간의 오타가 발생할 수 있습니다.\n잘못 인식된 이름이 있다면 표의 해당 칸을 클릭해서 직접 수정해 주세요.");
             } catch (error) {
                 console.error(error);
                 alert("❌ 이미지 분석 중 오류가 발생했습니다. 이미지가 너무 흐리거나 복잡할 수 있습니다.");
             } finally {
-                // 로딩 화면 숨기고 원래 상태로 복구
                 loading.style.display = 'none';
                 loading.innerHTML = disconnectHtml;
-                event.target.value = ''; // 동일한 사진을 또 올릴 수 있도록 초기화
+                event.target.value = ''; 
             }
         }
 
